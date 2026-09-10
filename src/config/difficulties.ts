@@ -9,24 +9,24 @@ export const TIME_STEP_PER_WAVE = 0.5;
 export const DIFFICULTIES: Record<DifficultyId, DifficultyConfig> = {
   facil: {
     id: 'facil',
-    hearts: 5,
-    multiplicandDigits: [2],
+    hearts: 10,
+    multiplicandDigits: [1],
     multiplierDigits: [1],
-    timeFloor: 5,
+    timeFloor: 15,
   },
   normal: {
     id: 'normal',
-    hearts: 3,
-    multiplicandDigits: [2, 3],
+    hearts: 5,
+    multiplicandDigits: [2],
     multiplierDigits: [1, 2],
-    timeFloor: 4,
+    timeFloor: 12,
   },
   dificil: {
     id: 'dificil',
-    hearts: 1,
+    hearts: 3,
     multiplicandDigits: [3, 4, 5],
-    multiplierDigits: [1, 2, 3],
-    timeFloor: 3.5,
+    multiplierDigits: [1, 2],
+    timeFloor: 9,
   },
 };
 
@@ -39,8 +39,21 @@ export function isDifficultyId(value: unknown): value is DifficultyId {
 /**
  * Tiempo de respuesta para una oleada dada (1-based), según la tabla de plan.md §3:
  * oleada 1 = 7.0 s, 2 = 6.5 s, 3 = 6.0 s, ... con piso por nivel.
+ * Si el piso del nivel supera INITIAL_TIME, el tiempo queda fijo en el piso.
  */
 export function timeLimitForWave(wave: number, cfg: DifficultyConfig): number {
   const raw = INITIAL_TIME - TIME_STEP_PER_WAVE * (wave - 1);
   return Math.max(raw, cfg.timeFloor);
 }
+
+/** Vida del monstruo por oleada (plan.md §3): 5, 7, 9, ... = 3 + 2n. */
+export function monsterHpForWave(wave: number): number {
+  return 3 + 2 * wave;
+}
+
+/** Datos de presentación de cada nivel para la pantalla de selección. Los temas visuales llegan en Fase 4. */
+export const DIFFICULTY_LABELS: Record<DifficultyId, { title: string; theme: string }> = {
+  facil: { title: 'Fácil', theme: 'Medieval' },
+  normal: { title: 'Normal', theme: 'Zombies y vampiros' },
+  dificil: { title: 'Difícil', theme: 'Alienígenas' },
+};

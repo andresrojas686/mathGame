@@ -1,8 +1,8 @@
-import type { DifficultyConfig, HistoryEntry, Problem, Rng } from '../types';
-import { timeLimitForWave } from '../config/difficulties';
+import type { DifficultyConfig, FailureSummary, HistoryEntry, Problem, Rng } from '../types';
+import { monsterHpForWave, timeLimitForWave } from '../config/difficulties';
 import { generateProblem } from './ProblemGenerator';
 
-export type SubmitResult = 'correct' | 'miss' | 'ignored';
+export type SubmitResult = 'correct' | 'defeated' | 'miss' | 'ignored';
 
 export type TickResult =
   | { type: 'running' }
@@ -12,7 +12,8 @@ export type TickResult =
 /**
  * Máquina de estado del bucle de combate (plan.md §3). No importa nada de Phaser.
  *
- *  - Respuesta correcta  → +1 acierto, nueva operación, temporizador se reinicia.
+ *  - Respuesta correcta  → +1 acierto, el monstruo pierde 1 de vida, nueva operación, temporizador se reinicia.
+ *  - Monstruo a 0        → oleada siguiente: monstruo más resistente y menos tiempo (hasta el piso del nivel).
  *  - Respuesta incorrecta → nada cambia salvo el historial; se puede reintentar.
  *  - Se acaba el tiempo   → −1 corazón, nueva operación, temporizador se reinicia.
  *  - Corazones = 0        → fin de partida. Es la única salida del bucle.
@@ -23,8 +24,12 @@ export class BattleState {
 
   hearts: number;
   correct = 0;
-  /** Oleada actual, 1-based. En Fase 1 no avanza; Fase 2 le da vida al monstruo. */
+  /** Oleada actual, 1-based. */
   wave = 1;
+  /** Monstruos derrotados. */
+  wavesCleared = 0;
+  monsterHp: number;
+  monsterMaxHp: number;
   problem: Problem;
   timeLimit: number;
   timeLeft: number;
@@ -36,6 +41,8 @@ export class BattleState {
     this.cfg = cfg;
     this.rng = rng;
     this.hearts = cfg.hearts;
+    this.monsterMaxHp = monsterHpForWave(this.wave);
+    this.monsterHp = this.monsterMaxHp;
     this.problem = generateProblem(cfg, undefined, rng);
     this.timeLimit = this.nextTimeLimit();
     this.timeLeft = this.timeLimit;
@@ -46,7 +53,6 @@ export class BattleState {
     return this.timeLimit - this.timeLeft;
   }
 
-  /** Punto único donde Fase 2 conecta la curva de oleadas. */
   nextTimeLimit(): number {
     return timeLimitForWave(this.wave, this.cfg);
   }
@@ -58,8 +64,16 @@ export class BattleState {
     if (!isCorrect) return 'miss';
 
     this.correct += 1;
+    this.monsterHp -= 1;
+    const defeated = this.monsterHp <= 0;
+    if (defeated) {
+      this.wavesCleared += 1;
+      this.wave += 1;
+      this.monsterMaxHp = monsterHpForWave(this.wave);
+      this.monsterHp = this.monsterMaxHp;
+    }
     this.advance();
-    return 'correct';
+    return defeated ? 'defeated' : 'correct';
   }
 
   /** Descuenta `dtSeconds` del temporizador y resuelve el ataque del monstruo si llega a cero. */
@@ -87,4 +101,26 @@ export class BattleState {
     this.timeLimit = this.nextTimeLimit();
     this.timeLeft = this.timeLimit;
   }
+}
+
+/**
+ * Agrupa el historial por operación y devuelve solo las que tuvieron algún fallo
+ * (respuesta incorrecta o tiempo agotado), ordenadas de más a menos problemática.
+ */
+export function summarizeFailures(history: readonly HistoryEntry[]): FailureSummary[] {
+  const byText = new Map<string, FailureSummary>();
+  for (const entry of history) {
+    const key = entry.problem.text;
+    let s = byText.get(key);
+    if (!s) {
+      s = { problem: entry.problem, misses: 0, timeouts: 0, solved: false };
+      byText.set(key, s);
+    }
+    if (entry.correct) s.solved = true;
+    else if (entry.given === null) s.timeouts += 1;
+    else s.misses += 1;
+  }
+  return [...byText.values()]
+    .filter((s) => s.misses + s.timeouts > 0)
+    .sort((a, b) => b.timeouts - a.timeouts || b.misses - a.misses || a.problem.text.localeCompare(b.problem.text));
 }

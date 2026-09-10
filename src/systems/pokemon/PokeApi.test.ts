@@ -50,23 +50,34 @@ describe('fetchPokemonInfo', () => {
       return jsonResponse(species([['es', 'Pikachu']]));
     }) as unknown as typeof fetch;
 
-    const a = await fetchPokemonInfo(25, { fetchFn, storage });
-    expect(a).toEqual({ id: 25, name: 'Pikachu', artworkUrl: artworkUrl(25) });
-    expect(storage.map.get('multiplicon.pokemon.25')).toBe('{"name":"Pikachu"}');
+    const a = await fetchPokemonInfo(250, { fetchFn, storage });
+    expect(a).toEqual({ id: 250, name: 'Pikachu', artworkUrl: artworkUrl(250), kind: 'remote' });
+    expect(storage.map.get('multiplicon.pokemon.250')).toBe('{"name":"Pikachu"}');
 
     clearPokemonMemoryCache();
-    const b = await fetchPokemonInfo(25, { fetchFn, storage });
+    const b = await fetchPokemonInfo(250, { fetchFn, storage });
     expect(b.name).toBe('Pikachu');
     expect(calls).toBe(1);
   });
 
-  it('ante error HTTP o de red devuelve el fallback sin lanzar', async () => {
+  it('para la primera generación usa la tabla local sin consultar la API', async () => {
+    let calls = 0;
+    const fetchFn = (async () => {
+      calls += 1;
+      return jsonResponse({});
+    }) as unknown as typeof fetch;
+    const info = await fetchPokemonInfo(25, { fetchFn, storage: null });
+    expect(info).toEqual({ id: 25, name: 'Pikachu', artworkUrl: artworkUrl(25), kind: 'remote' });
+    expect(calls).toBe(0);
+  });
+
+  it('ante error HTTP o de red devuelve el fallback marcado, sin lanzar', async () => {
     const bad = (async () => jsonResponse({}, false, 500)) as unknown as typeof fetch;
-    expect(await fetchPokemonInfo(3, { fetchFn: bad, storage: null })).toEqual({ id: 3, name: 'Pokémon #3', artworkUrl: artworkUrl(3) });
+    expect(await fetchPokemonInfo(300, { fetchFn: bad, storage: null })).toEqual({ id: 300, name: 'Pokémon #300', artworkUrl: artworkUrl(300), kind: 'remote', fallback: true });
     const boom = (async () => {
       throw new Error('sin red');
     }) as unknown as typeof fetch;
-    expect((await fetchPokemonInfo(4, { fetchFn: boom, storage: null })).name).toBe('Pokémon #4');
+    expect((await fetchPokemonInfo(400, { fetchFn: boom, storage: null })).fallback).toBe(true);
   });
 
   it('aborta por timeout y devuelve el fallback', async () => {
@@ -74,7 +85,7 @@ describe('fetchPokemonInfo', () => {
       new Promise<Response>((_, reject) => {
         init?.signal?.addEventListener('abort', () => reject(new Error('abortado')));
       })) as unknown as typeof fetch;
-    const info = await fetchPokemonInfo(9, { fetchFn: slow, storage: null, timeoutMs: 10 });
-    expect(info.name).toBe('Pokémon #9');
+    const info = await fetchPokemonInfo(900, { fetchFn: slow, storage: null, timeoutMs: 10 });
+    expect(info.fallback).toBe(true);
   });
 });

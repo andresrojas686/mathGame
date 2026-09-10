@@ -1,3 +1,4 @@
+import { GEN1_COUNT, GEN1_NAMES } from '../../config/gen1';
 import type { Rng } from '../../types';
 import { safeStorage, type KeyValueStorage } from '../scores/ScoreRepository';
 
@@ -12,7 +13,12 @@ export interface PokemonInfo {
   id: number;
   /** Nombre en español si existe; si no, inglés; si no, "Pokémon #id". */
   name: string;
+  /** URL de la imagen: ilustración oficial remota o SVG local de la primera generación. */
   artworkUrl: string;
+  /** 'local' = arte versionado en public/assets/pokemon, disponible sin internet. */
+  kind: 'remote' | 'local';
+  /** Si es verdad, PokéAPI no respondió y el nombre es el genérico. */
+  fallback?: boolean;
 }
 
 export interface PokeApiOptions {
@@ -25,13 +31,26 @@ export function randomPokemonId(rng: Rng = Math.random): number {
   return 1 + Math.floor(rng() * POKEMON_COUNT);
 }
 
+export function randomGen1Id(rng: Rng = Math.random): number {
+  return 1 + Math.floor(rng() * GEN1_COUNT);
+}
+
 /** La ilustración oficial no depende de la API: la URL se deriva del id. */
 export function artworkUrl(id: number): string {
   return `${ARTWORK_URL}${id}.png`;
 }
 
+export function hasLocalArt(id: number): boolean {
+  return id >= 1 && id <= GEN1_COUNT;
+}
+
+/** Pokémon de la primera generación con arte y nombre versionados: funciona sin red. */
+export function localPokemonInfo(id: number): PokemonInfo {
+  return { id, name: GEN1_NAMES[id] ?? `Pokémon #${id}`, artworkUrl: `assets/pokemon/${id}.svg`, kind: 'local' };
+}
+
 export function fallbackInfo(id: number): PokemonInfo {
-  return { id, name: `Pokémon #${id}`, artworkUrl: artworkUrl(id) };
+  return { id, name: `Pokémon #${id}`, artworkUrl: artworkUrl(id), kind: 'remote', fallback: true };
 }
 
 const memory = new Map<number, PokemonInfo>();
@@ -56,11 +75,13 @@ export function pickName(id: number, species: SpeciesResponse): string {
 }
 
 /**
- * Nombre e ilustración de un Pokémon. Nunca lanza: ante cualquier fallo devuelve el fallback,
- * que ya incluye la URL de la ilustración. Cachea en memoria y en localStorage, como pide
- * la política de uso de PokéAPI.
+ * Nombre e ilustración oficial de un Pokémon. Nunca lanza: ante cualquier fallo devuelve el
+ * fallback marcado como tal. Cachea en memoria y en localStorage, como pide la política de
+ * uso de PokéAPI. Para la primera generación el nombre sale de la tabla local sin consultar.
  */
 export async function fetchPokemonInfo(id: number, opts: PokeApiOptions = {}): Promise<PokemonInfo> {
+  if (hasLocalArt(id)) return { id, name: GEN1_NAMES[id]!, artworkUrl: artworkUrl(id), kind: 'remote' };
+
   const cached = memory.get(id);
   if (cached) return cached;
 
@@ -78,7 +99,7 @@ export async function fetchPokemonInfo(id: number, opts: PokeApiOptions = {}): P
     const res = await fetchFn(`${SPECIES_URL}${id}`, { signal: ctrl.signal });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const species = (await res.json()) as SpeciesResponse;
-    const info: PokemonInfo = { id, name: pickName(id, species), artworkUrl: artworkUrl(id) };
+    const info: PokemonInfo = { id, name: pickName(id, species), artworkUrl: artworkUrl(id), kind: 'remote' };
     memory.set(id, info);
     writeCache(storage, info);
     return info;
@@ -102,7 +123,7 @@ function readCache(storage: KeyValueStorage | null, id: number): PokemonInfo | n
     if (!raw) return null;
     const parsed = JSON.parse(raw) as Partial<PokemonInfo>;
     if (typeof parsed.name !== 'string') return null;
-    return { id, name: parsed.name, artworkUrl: artworkUrl(id) };
+    return { id, name: parsed.name, artworkUrl: artworkUrl(id), kind: 'remote' };
   } catch {
     return null;
   }

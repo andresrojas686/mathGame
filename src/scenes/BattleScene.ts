@@ -5,7 +5,8 @@ import { DEFAULT_TRAINER_ID } from '../config/trainers';
 import { audio } from '../systems/AudioManager';
 import { BattleState } from '../systems/BattleState';
 import { missTextFor } from '../systems/FeedbackSettings';
-import { fetchPokemonInfo, randomPokemonId, type PokemonInfo } from '../systems/pokemon/PokeApi';
+import type { PokemonInfo } from '../systems/pokemon/PokeApi';
+import { PokemonSource } from '../systems/pokemon/PokemonSource';
 import type { BattleParams, DifficultyId, Operation, Problem, ResultParams } from '../types';
 import { HeartBar } from '../ui/HeartBar';
 import { HeroView } from '../ui/HeroView';
@@ -40,7 +41,7 @@ export class BattleScene extends Phaser.Scene {
 
   private nextPokemon: Promise<PokemonInfo> | null = null;
   private defeatedNames: string[] = [];
-  private usedIds = new Set<number>();
+  private pokemonSource = new PokemonSource();
 
   private layers: Phaser.GameObjects.Image[] = [];
   private heartBar!: HeartBar;
@@ -75,7 +76,7 @@ export class BattleScene extends Phaser.Scene {
     this.revealMsLeft = 0;
     this.nextPokemon = null;
     this.defeatedNames = [];
-    this.usedIds = new Set();
+    this.pokemonSource = new PokemonSource();
     this.layers = [];
     this.reducedMotion = prefersReducedMotion();
   }
@@ -121,10 +122,7 @@ export class BattleScene extends Phaser.Scene {
   // ---------- Pokémon ----------
 
   private requestPokemon(): Promise<PokemonInfo> {
-    let id = randomPokemonId();
-    for (let i = 0; i < 10 && this.usedIds.has(id); i++) id = randomPokemonId();
-    this.usedIds.add(id);
-    return fetchPokemonInfo(id);
+    return this.pokemonSource.next();
   }
 
   private async spawnFirstPokemon(): Promise<void> {
@@ -170,6 +168,7 @@ export class BattleScene extends Phaser.Scene {
   private buildStage(): void {
     this.hero = new HeroView(this, 200, 330, this.trainerId, this.reducedMotion);
     this.monster = new MonsterView(this, 1080, 340, this.reducedMotion);
+    this.monster.localFallback = (id) => this.pokemonSource.localFor(id);
     if (!this.reducedMotion) this.tweens.add({ targets: this.hero, y: '+=8', duration: 900, yoyo: true, repeat: -1, ease: 'Sine.inOut' });
   }
 

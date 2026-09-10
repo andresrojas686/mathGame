@@ -43,8 +43,21 @@ Funciona igual en Windows, macOS y Linux. No requiere Docker en el PC de desarro
 
 - Node 22 o superior
 - pnpm 10 o superior
-- Conexión a internet para ver los Pokémon (sin red el juego funciona igual, con rectángulos)
 - Un navegador moderno. En tablet, usar en horizontal.
+- Internet es opcional: ver la sección siguiente.
+
+## Jugar con y sin internet
+
+| | Con internet | Sin internet |
+|---|---|---|
+| Enemigos | Cualquiera de las 1025 especies, con su ilustración oficial descargada de PokéAPI | Uno de los 151 de la primera generación, con arte SVG y nombre en español incluidos en el proyecto |
+| Nombres | En español desde PokéAPI, cacheados en el navegador | De la tabla local |
+| Ranking | Servidor (`pnpm dev:server`) si está corriendo | Igual: el servidor es local y no necesita internet |
+| Todo lo demás | Igual | Igual |
+
+El juego decide solo: si el navegador reporta que no hay conexión usa el paquete local; si hay conexión pero PokéAPI no responde, también; y si una ilustración remota falla al descargar y ese Pokémon está entre los 151, muestra la versión local. Nunca hay que configurar nada.
+
+El paquete local se generó con `node scripts/fetch-gen1.mjs` (arte en `public/assets/pokemon/`, nombres en `src/config/gen1.ts`) y está versionado, así que un clon nuevo ya lo trae.
 
 ## Lanzar en desarrollo
 
@@ -178,7 +191,8 @@ En macOS o Linux: `lsof -ti:5173 | xargs kill` y `lsof -ti:8787 | xargs kill`.
 | `pnpm install` falla por versión de Node | Necesita Node 22 o superior. `node --version` y actualiza desde nodejs.org. |
 | `Port 5173 is in use` | Otro `pnpm dev` sigue abierto. Ciérralo o usa `pnpm dev --port 5174` (el proxy a la API sigue funcionando). |
 | El ranking dice "sin conexión con el servidor" | No está corriendo `pnpm dev:server` en la otra terminal. Las puntuaciones se guardan en el navegador y se envían solas cuando el servidor vuelva. |
-| El enemigo es un rectángulo con "Pokémon #n" | Sin acceso a pokeapi.co o a raw.githubusercontent.com (red, proxy o cortafuegos). El juego funciona igual. |
+| Sin internet solo salen Pokémon de la primera generación | Es lo esperado: son los 151 que van incluidos en el proyecto. Con conexión vuelven a salir los 1025. |
+| El enemigo es un rectángulo con "Pokémon #n" | Solo pasa si falla la descarga remota de un Pokémon fuera de los 151 y no hay versión local. Es raro; el juego funciona igual. |
 | No suena nada | El navegador bloquea el audio hasta el primer clic o tecla. Comprueba también el botón de silencio de la esquina y los volúmenes en Ajustes. |
 | El texto sale con otra fuente | No se cargó `assets/fonts/atkinson.css`. Recarga con la caché vacía (Ctrl+Shift+R). |
 | Pantalla "Gira el dispositivo" | Estás en vertical en un móvil o tablet. Gira a horizontal. |

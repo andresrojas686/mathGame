@@ -4,14 +4,17 @@ import { COLORS, UI_FONT } from './style';
 
 const TARGET_HEIGHT = 230;
 const HP_WIDTH = 220;
+/** Tamaño al que se rasterizan los SVG locales; suficiente para 230 px en pantalla con nitidez. */
+const SVG_SIZE = 512;
 
-export function pokemonTextureKey(id: number): string {
-  return `pokemon-${id}`;
+export function pokemonTextureKey(info: Pick<PokemonInfo, 'id' | 'kind'>): string {
+  return `pokemon-${info.kind}-${info.id}`;
 }
 
 /**
  * El enemigo: ilustración del Pokémon (o un rectángulo mientras carga o si la red falla),
  * nombre, barra de vida. La textura se pide al Loader de Phaser en tiempo de ejecución.
+ * Si la imagen remota no llega y existe versión local, se usa esa.
  */
 export class MonsterView extends Phaser.GameObjects.Container {
   private readonly placeholder: Phaser.GameObjects.Rectangle;
@@ -22,6 +25,11 @@ export class MonsterView extends Phaser.GameObjects.Container {
   private current: PokemonInfo | null = null;
   private readonly homeX: number;
   private readonly reducedMotion: boolean;
+  /** Claves ya pedidas al Loader en esta escena, para no encolar la misma imagen dos veces. */
+  private readonly requested = new Set<string>();
+
+  /** Alternativa local para un Pokémon cuya imagen remota falla; la define la escena. */
+  localFallback: ((id: number) => PokemonInfo | null) | null = null;
 
   constructor(scene: Phaser.Scene, x: number, y: number, reducedMotion: boolean) {
     super(scene, x, y);
@@ -41,20 +49,14 @@ export class MonsterView extends Phaser.GameObjects.Container {
     return this.current?.name ?? '';
   }
 
-  /** Claves ya pedidas al Loader en esta escena, para no encolar la misma imagen dos veces. */
-  private readonly requested = new Set<string>();
-
-  /** Empieza a descargar la ilustración sin mostrarla. Se usa para tener listo el siguiente. */
+  /** Empieza a descargar la imagen sin mostrarla. Se usa para tener listo el siguiente. */
   preload(info: PokemonInfo): void {
-    const key = pokemonTextureKey(info.id);
+    const key = pokemonTextureKey(info);
     if (this.scene.textures.exists(key) || this.requested.has(key)) return;
     this.requested.add(key);
     const loader = this.scene.load;
-    loader.image(key, info.artworkUrl);
-    // Si la descarga falla (sin red, 404), queda el rectángulo; el juego sigue igual.
-    loader.once(`loaderror`, (file: { key?: string }) => {
-      if (file?.key === key) console.warn(`Pokémon: no se pudo cargar la ilustración ${info.artworkUrl}`);
-    });
+    if (info.kind === 'local') loader.svg(key, info.artworkUrl, { width: SVG_SIZE, height: SVG_SIZE });
+    else loader.image(key, info.artworkUrl);
     loader.start();
   }
 
@@ -64,7 +66,7 @@ export class MonsterView extends Phaser.GameObjects.Container {
     this.nameText.setText(info.name);
     this.setImage(null);
 
-    const key = pokemonTextureKey(info.id);
+    const key = pokemonTextureKey(info);
     if (this.scene.textures.exists(key)) {
       this.setImage(key);
       return;
@@ -72,9 +74,17 @@ export class MonsterView extends Phaser.GameObjects.Container {
     const loader = this.scene.load;
     const onDone = () => {
       // Puede haber cambiado de Pokémon mientras cargaba.
-      if (this.current?.id === info.id && this.scene.textures.exists(key)) this.setImage(key);
+      if (this.current === info && this.scene.textures.exists(key)) this.setImage(key);
     };
-    loader.once(`filecomplete-image-${key}`, onDone);
+    const onError = (file: { key?: string }) => {
+      if (file?.key !== key) return;
+      loader.off(`filecomplete-${info.kind === 'local' ? 'svg' : 'image'}-${key}`, onDone);
+      console.warn(`Pokémon: no se pudo cargar ${info.artworkUrl}`);
+      const local = info.kind === 'remote' ? this.localFallback?.(info.id) : null;
+      if (local && this.current === info) this.show(local);
+    };
+    loader.once(`filecomplete-${info.kind === 'local' ? 'svg' : 'image'}-${key}`, onDone);
+    loader.once('loaderror', onError);
     this.preload(info);
   }
 
@@ -136,8 +146,7 @@ export class MonsterView extends Phaser.GameObjects.Container {
       return;
     }
     const img = this.scene.add.image(0, 0, key);
-    const scale = TARGET_HEIGHT / img.height;
-    img.setScale(scale);
+    img.setScale(TARGET_HEIGHT / img.height);
     this.image = img;
     this.addAt(img, 1);
     this.placeholder.setVisible(false);

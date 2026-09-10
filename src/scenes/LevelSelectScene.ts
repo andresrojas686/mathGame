@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { DIFFICULTIES, DIFFICULTY_IDS, DIFFICULTY_LABELS, timeLimitForWave } from '../config/difficulties';
+import { DEFAULT_TRAINER_ID } from '../config/trainers';
 import type { BattleParams, DifficultyId } from '../types';
 import { bindWindowKeys } from '../ui/keys';
 import { COLORS, H, UI_FONT, W } from '../ui/style';
@@ -11,6 +12,7 @@ interface Card {
 
 export class LevelSelectScene extends Phaser.Scene {
   private name = '';
+  private trainer = DEFAULT_TRAINER_ID;
   private cards: Card[] = [];
   private focus = 0;
 
@@ -18,8 +20,9 @@ export class LevelSelectScene extends Phaser.Scene {
     super('LevelSelect');
   }
 
-  init(data: { name?: string }): void {
+  init(data: { name?: string; trainer?: string }): void {
     this.name = data.name ?? 'Jugador';
+    this.trainer = data.trainer ?? DEFAULT_TRAINER_ID;
     this.cards = [];
     this.focus = 0;
   }
@@ -27,7 +30,7 @@ export class LevelSelectScene extends Phaser.Scene {
   create(): void {
     this.cameras.main.setBackgroundColor(COLORS.bg);
     this.add
-      .text(W / 2, 90, `Hola, ${this.name}. Elige un nivel`, { fontFamily: UI_FONT, fontSize: '48px', color: COLORS.text })
+      .text(W / 2, 90, `${this.name}, elige un gimnasio`, { fontFamily: UI_FONT, fontSize: '48px', color: COLORS.text })
       .setOrigin(0.5);
 
     const cardW = 340;
@@ -36,7 +39,7 @@ export class LevelSelectScene extends Phaser.Scene {
     DIFFICULTY_IDS.forEach((id, i) => this.buildCard(id, startX + i * (cardW + gap), 380, cardW, 380));
 
     this.add
-      .text(W / 2, H - 50, '← → para elegir · Enter para jugar · 1, 2, 3 directo', {
+      .text(W / 2, H - 50, '← → para elegir · Enter para jugar · 1, 2, 3 directo · Escape para cambiar de líder', {
         fontFamily: UI_FONT,
         fontSize: '18px',
         color: COLORS.muted,
@@ -102,7 +105,7 @@ export class LevelSelectScene extends Phaser.Scene {
       const card = this.cards[Number(e.key) - 1];
       if (card) this.choose(card.id);
     } else if (e.key === 'Escape') {
-      this.scene.start('Name');
+      this.scene.start('TrainerSelect', { name: this.name });
     }
   }
 
@@ -115,7 +118,7 @@ export class LevelSelectScene extends Phaser.Scene {
   }
 
   private choose(level: DifficultyId): void {
-    const params: BattleParams = { level, name: this.name };
+    const params: BattleParams = { level, operation: 'multiplicar', name: this.name, trainer: this.trainer };
     this.scene.start('Battle', params);
   }
 }

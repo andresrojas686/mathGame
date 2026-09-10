@@ -4,7 +4,7 @@
 **Tipo:** Juego educativo 2D para navegador
 **Público:** Niños de 7 a 12 años
 **Objetivo pedagógico:** Automatizar la multiplicación bajo presión de tiempo, con dificultad progresiva y refuerzo positivo.
-**Alcance de la v1:** un jugador, solo multiplicación, partida sin final, música y ambientación propias por dificultad, ranking persistido en archivo del proyecto.
+**Alcance de la v1:** un jugador, multiplicación y división (esta última en fase 4), partida sin final, ambientación de gimnasios Pokémon con música propia por dificultad, ranking persistido en archivo del proyecto.
 
 ---
 
@@ -28,6 +28,8 @@ La tensión del juego es el reloj. El niño no está "haciendo una tarea", está
 | Servidor | Hono.js sobre Node | Sirve el build y expone la API del ranking |
 | Persistencia | `data/scores.json` | Archivo del proyecto, sin base de datos |
 | Deploy | Dokploy en VPS | Necesita disco persistente para el archivo |
+| Enemigos | PokéAPI (pokeapi.co) | Nombre en español e ilustración oficial de un Pokémon aleatorio por oleada, sin clave ni cuota |
+| Héroe | Sprites de líderes de gimnasio | Descargados una vez de Pokémon Showdown y versionados en `public/assets/trainers/` |
 
 ### Por qué no Cloudflare Pages
 
@@ -79,7 +81,7 @@ Piso de tiempo por nivel: fácil 5 s, normal 4 s, difícil 3.5 s.
 
 El piso es lo que hace posible una partida infinita. Sin él, el tiempo tendería a cero y toda partida terminaría por reflejos y no por matemáticas. Con él, un niño que domina sus tablas puede sostener la partida el tiempo que quiera, que es exactamente el comportamiento buscado.
 
-**Variedad visual en partidas largas:** a partir de la oleada 6, el monstruo alterna entre tres variantes de sprite dentro del mismo tema y cambia de paleta cada cinco oleadas. Una sesión de veinte minutos con un solo monstruo repetido cansa la vista.
+**Variedad visual en partidas largas:** cada oleada trae un Pokémon distinto, elegido al azar entre 1025 especies y sin repetir dentro de la partida. Una sesión de veinte minutos con un solo monstruo repetido cansa la vista; aquí ese problema no existe.
 
 ---
 
@@ -87,13 +89,32 @@ El piso es lo que hace posible una partida infinita. Sin él, el tiempo tenderí
 
 | | Fácil | Normal | Difícil |
 |---|---|---|---|
-| **Tema** | Medieval | Zombies y vampiros | Alienígenas y tecnología |
+| **Gimnasio** | Roca y planta | Agua y eléctrico | Psíquico y fantasma |
 | **Corazones** | 5 | 3 | 1 |
 | **Multiplicando** | 2 dígitos (10–99) | 2–3 dígitos (10–999) | 3–5 dígitos (100–99999) |
 | **Multiplicador** | 1 cifra (2–9) | 1–2 cifras (2–99) | 1–3 cifras (2–999) |
 | **Piso de tiempo** | 5 s | 4 s | 3.5 s |
 
 En normal y difícil, la cantidad de dígitos de cada factor se sortea en cada operación, así que la dificultad varía dentro del mismo nivel.
+
+Los valores concretos (corazones, cifras, piso) viven en `src/config/difficulties.ts` y se han ajustado desde esta tabla; el archivo manda.
+
+### Operación: multiplicar o dividir (fase 4)
+
+El jugador elige en la pantalla de nivel si juega a **multiplicar** o a **dividir**. Los tres niveles existen para las dos operaciones.
+
+- **Cifras por nivel.** Se definen por el **dividendo** y el **divisor**, no por los factores de la multiplicación:
+
+  | | Fácil | Normal | Difícil |
+  |---|---|---|---|
+  | **Dividendo** | 2 cifras | 2 o 3 cifras | 2, 3 o 4 cifras |
+  | **Divisor** | 1 cifra | 1 o 2 cifras | 1, 2 o 3 cifras |
+
+  En normal y difícil la cantidad de cifras se sortea en cada operación, como en la multiplicación. Nunca se sortea un divisor con más cifras que el dividendo.
+- **División exacta, siempre.** Se elige primero el divisor `b` con sus cifras (nunca 0 ni 1), luego un cociente `q ≥ 2` tal que `q·b` tenga exactamente las cifras del dividendo, y se presenta `q·b ÷ b`; la respuesta es `q`. Nunca hay resto ni decimales. Si para una combinación de cifras no existe ningún cociente válido (por ejemplo 2 cifras entre 99), se vuelve a sortear.
+- **El doble de tiempo.** En división, el tiempo por operación es `2 × timeLimitForWave(oleada)`, incluido el piso. Todo lo demás (corazones, vida del monstruo, oleadas) es igual.
+- **Ranking separado.** Cada operación tiene sus propias tablas por nivel (sección 10).
+- La configuración vive en `dividendDigits` y `divisorDigits` de cada `DifficultyConfig`, y el generador en `generateDivisionProblem` (`src/systems/ProblemGenerator.ts`), ya implementados y probados; la fase 4 conecta la elección en pantalla.
 
 ### Generador de operaciones
 
@@ -198,101 +219,101 @@ La operación va centrada y es el elemento más grande de la pantalla. Héroe y 
 
 ## 7. Dirección visual
 
-### Principio que atraviesa los tres temas
+### Principio que atraviesa los tres gimnasios
 
-**La operación nunca se disfraza.** Los fondos, los personajes y la interfaz cambian por completo entre niveles, pero los números se muestran siempre en la misma tipografía, mismo tamaño relativo y mismo contraste. Un 6 debe leerse igual de rápido en el castillo que en la nave alienígena. Es lo contrario del instinto de tematizar todo, y es la decisión correcta: la fantasía es el envoltorio, la legibilidad del número es el producto.
+**La operación nunca se disfraza.** Los fondos, los personajes y la interfaz cambian por completo entre niveles, pero los números se muestran siempre en la misma tipografía, mismo tamaño relativo y mismo contraste. Un 6 debe leerse igual de rápido en el gimnasio de roca que en el psíquico. La fantasía es el envoltorio; la legibilidad del número es el producto.
 
 **Tipografía de los números:** Atkinson Hyperlegible. Diseñada para máxima distinción entre caracteres parecidos, resuelve el problema real de este juego (0/O, 1/7, 6/8) mejor que cualquier fuente decorativa.
 
-### Fácil — Medieval
+### Personajes: Pokémon y líderes de gimnasio
 
-Castillo al atardecer, estandartes, antorchas. Cálido y acogedor: es el nivel donde el niño está aprendiendo y no queremos que el ambiente lo intimide.
+Los tres niveles comparten la misma ambientación: **gimnasios Pokémon**. El jugador es un líder de gimnasio que elige en una galería (doce líderes de Kanto y Johto) y el enemigo es un Pokémon aleatorio entre las 1025 especies, distinto en cada oleada.
+
+- El nombre del Pokémon se muestra en español (PokéAPI lo trae; si falla, inglés; si no hay red, "Pokémon #n").
+- La ilustración oficial se carga desde el repositorio de sprites de PokéAPI, escalada a 230 px de alto. El siguiente Pokémon se descarga mientras se combate con el actual, así el cambio de oleada no espera a la red.
+- Sin red, el enemigo es un rectángulo con su nombre y el juego sigue igual. Ninguna mecánica depende de que la imagen llegue.
+- Los sprites de líderes son pixel art de 80×80 escalado ×2.5 con filtro NEAREST, para que se vea nítido y no borroso.
+
+### Fácil — Gimnasio de roca y planta
+
+Cálido y terroso: es el nivel donde el niño está aprendiendo y no queremos que el ambiente lo intimide.
 
 ```
-#2B1B47  púrpura de anochecer (fondo)
-#C4643C  ladrillo de antorcha
-#E8C87A  oro de estandarte (acentos, corazones)
-#6B8F5E  verde de campo
+#2A1F1A  tierra oscura (fondo)
+#8C6A4A  roca
+#6B8F5E  verde de planta
+#E8C87A  ámbar (acentos, corazones)
 #F2E9D8  pergamino (texto de interfaz)
 ```
 
-Tipografía de títulos: MedievalSharp. Personajes: caballero con casco y escudo contra un dragón rechoncho, más simpático que amenazante.
+### Normal — Gimnasio de agua y eléctrico
 
-### Normal — Zombies y vampiros
-
-Cementerio con niebla y luna llena. Sube la tensión pero se mantiene en registro caricaturesco: monstruos con ojos grandes y colmillos torcidos, nunca sangre ni terror realista.
+Sube la tensión con azules profundos y destellos ámbar.
 
 ```
-#12202B  azul de medianoche (fondo)
-#7BA05B  verde zombie
-#8B2F47  vino de vampiro
-#C9D6DF  niebla lunar
-#E4B363  ámbar de farol (acentos)
+#12202B  azul de fondo
+#2F7FB8  agua
+#E4B363  ámbar eléctrico (acentos)
+#C9D6DF  espuma (texto secundario)
+#F2E9D8  texto de interfaz
 ```
 
-Tipografía de títulos: Jolly Lodger. Personajes: cazador con linterna contra un zombi al que se le desprenden partes al recibir daño, en clave cómica.
+### Difícil — Gimnasio psíquico y fantasma
 
-### Difícil — Alienígenas y tecnología
-
-Puente de nave espacial con la Tierra al fondo. Frío, limpio, sin ruido visual: es el nivel de un solo corazón y no puede haber nada en pantalla compitiendo con la operación.
+Frío, limpio, sin ruido visual: es el nivel con menos corazones y no puede haber nada en pantalla compitiendo con la operación.
 
 ```
-#0A1628  vacío espacial (fondo)
-#00D9C0  turquesa de holograma
-#B45CFF  violeta alienígena
-#FF5470  rojo de alarma (el único corazón, avisos)
-#E6F1FF  blanco de pantalla
+#0F0A1E  vacío violeta (fondo)
+#B45CFF  violeta psíquico
+#00D9C0  turquesa (acentos)
+#FF5470  rojo de alarma (corazones, avisos)
+#E6F1FF  texto de interfaz
 ```
-
-Tipografía de títulos: Chakra Petch. Angular y técnica sin caer en la fuente de ciencia ficción por defecto. Personajes: piloto con traje presurizado contra un alienígena de silueta insectoide.
 
 ### Retroalimentación
 
-- **Acierto:** el héroe golpea, el monstruo retrocede, destello corto, sonido ascendente. Menos de 400 ms; nada puede retrasar la siguiente operación.
+- **Acierto:** el líder embiste, el Pokémon destella y retrocede, sonido ascendente. Menos de 400 ms; nada puede retrasar la siguiente operación.
 - **Fallo:** el campo de respuesta se sacude horizontalmente y sube un aviso corto tipo "MISS", **sin ningún sonido**. Ver la sección 9 para el detalle. No hay mensajes de ánimo ni explicaciones: interrumpir con "¡Casi, sigue intentando!" le roba segundos al reintento.
-- **Ataque del monstruo:** la pantalla se sacude, un corazón se apaga, la operación se desvanece y entra la siguiente. Aquí sí se muestra medio segundo el resultado correcto de la operación perdida: es el único momento en que el niño puede aprender de ese error.
+- **Ataque del Pokémon:** embiste hacia el líder, la pantalla se sacude, un corazón se apaga, la operación se desvanece y entra la siguiente. Aquí sí se muestra medio segundo el resultado correcto de la operación perdida: es el único momento en que el niño puede aprender de ese error.
+- **Pokémon derrotado:** sale por la derecha y entra el siguiente con un pequeño rebote. La siguiente operación ya está en pantalla durante la transición.
 - **Tiempo bajo:** cuando quedan menos de 2 segundos, la barra pulsa. Sin sonido de alarma repetitivo, que agota en sesiones largas.
 
 ---
 
 ## 8. Assets
 
-Los assets se producen como **SVG escritos a mano**, no como imágenes rasterizadas ni pack comprado. Phaser los carga como textura con `this.load.svg(key, path, { width, height })` y quedan nítidos en cualquier resolución sin exportar variantes @2x.
+Héroe y enemigo **no se dibujan a mano**: son el sprite del líder elegido y la ilustración del Pokémon (sección 7). El resto de la interfaz se produce como **SVG escritos a mano**, no como imágenes rasterizadas ni pack comprado. Phaser los carga como textura con `this.load.svg(key, path, { width, height })` y quedan nítidos en cualquier resolución.
 
 ### Cómo se anima
 
-Nada de sprite sheets frame por frame. Cada personaje se compone de tres a cinco piezas SVG independientes (cuerpo, cabeza, brazo con arma, ojos) montadas en un `Container` de Phaser y animadas con tweens: rotación del brazo para atacar, desplazamiento vertical suave para el idle, sacudida y tinte rojo al recibir daño.
-
-Es menos expresivo que animación cuadro a cuadro, pero para este juego alcanza de sobra y elimina la parte más costosa de la producción de arte. Las animaciones que importan duran menos de 400 ms y ocurren mientras el niño ya está leyendo la siguiente operación.
+Los personajes son una sola imagen animada con tweens sobre su contenedor (`HeroView`, `MonsterView`): embestida, retroceso, destello de tinte, salida y entrada. Es menos expresivo que animación cuadro a cuadro, pero para este juego alcanza y elimina la parte más costosa de la producción de arte. Las animaciones que importan duran menos de 400 ms y ocurren mientras el niño ya está leyendo la siguiente operación.
 
 ### Inventario
 
-**Por cada tema (×3):**
+**Por cada gimnasio (×3):**
 
 | Asset | Piezas | Notas |
 |---|---|---|
-| Fondo | 3 capas | Cielo, media distancia, primer plano. Parallax leve al sacudirse |
-| Héroe | 4 piezas | Cuerpo, cabeza, brazo con arma, ojos |
-| Monstruo A | 4 piezas | Variante principal |
-| Monstruo B | 4 piezas | Aparece desde la oleada 6 |
-| Monstruo C | 4 piezas | Aparece desde la oleada 6 |
+| Fondo | 3 capas | Cielo o techo, media distancia, primer plano. Parallax leve al sacudirse |
 | Marco de interfaz | 1 | Bordes de la caja de operación y del teclado |
 | Corazón | 2 estados | Lleno y vacío |
 
 **Compartidos:**
 
-- Teclado numérico: fondo de tecla, estados normal / presionado / deshabilitado. Se tiñe por tema con `setTint`, no se redibuja tres veces.
+- Teclado numérico: fondo de tecla, estados normal / presionado / deshabilitado. Se tiñe por gimnasio con `setTint`, no se redibuja tres veces.
 - Efectos: destello de impacto, partículas de golpe, viñeta roja de daño.
 - Iconos: silencio, volver, ranking.
+- Sprites de los doce líderes (`public/assets/trainers/`, descargados con `scripts/fetch-trainers.mjs`).
 
 ### Restricciones de producción
 
-- Paleta limitada a los 5 colores del tema. Un SVG con degradados y cincuenta nodos es difícil de mantener y pesa más que su valor.
+- Paleta limitada a los 5 colores del gimnasio.
 - Siluetas legibles a 200 px de alto, que es el tamaño real en pantalla.
 - Sin texto dentro de los SVG: todo el texto lo dibuja Phaser para poder traducirlo o cambiarlo.
-- Cada personaje en un solo archivo con las piezas como `<g id="...">`, cargado y despiezado en el preload.
 
-Si más adelante se quiere arte de mayor nivel, los SVG funcionan como base perfectamente reemplazable: mismo tamaño, mismos puntos de anclaje, misma estructura de piezas. Se cambia el archivo y no se toca código.
+### Licencias
+
+Pokémon es marca de Nintendo, Creatures y GAME FREAK. El uso aquí es educativo y sin ánimo de lucro, y queda registrado en `CREDITS.md`. Si el juego se quisiera distribuir comercialmente, `HeroView` y `MonsterView` se alimentan con otras imágenes sin tocar la lógica.
 
 ---
 
@@ -528,15 +549,18 @@ La música se toma de bibliotecas con licencia libre para uso comercial: Incompe
 
 ### Almacenamiento
 
-El ranking vive en `data/scores.json` en la raíz del proyecto:
+El ranking vive en `data/scores.json` en la raíz del proyecto. Hay **seis tablas**: una por operación y nivel, con clave `operación:nivel`.
 
 ```json
 {
-  "version": 1,
-  "levels": {
-    "facil":   [ { "name": "Sofía", "correct": 47, "waves": 6, "date": "2026-09-06T14:22:10Z" } ],
-    "normal":  [],
-    "dificil": []
+  "version": 2,
+  "boards": {
+    "multiplicar:facil":   [ { "name": "Sofía", "correct": 47, "waves": 6, "date": "2026-09-06T14:22:10Z" } ],
+    "multiplicar:normal":  [],
+    "multiplicar:dificil": [],
+    "dividir:facil":       [],
+    "dividir:normal":      [],
+    "dividir:dificil":     []
   }
 }
 ```
@@ -545,40 +569,41 @@ El ranking vive en `data/scores.json` en la raíz del proyecto:
 interface ScoreEntry {
   name: string;      // máx. 12 caracteres, saneado
   correct: number;   // operaciones resueltas — criterio de orden
-  waves: number;     // monstruos derrotados
+  waves: number;     // Pokémon derrotados
   date: string;      // ISO
 }
 ```
 
 ### API
 
-Dos rutas en Hono:
+Tres rutas en Hono (`server/app.ts`):
 
 ```
-GET  /api/leaderboard        → el archivo completo, los 10 mejores por nivel
-POST /api/scores             → { name, level, correct, waves } → entrada guardada + posición
+GET  /api/health             → { ok: true }
+GET  /api/leaderboard        → las 10 mejores de cada tabla
+POST /api/scores             → { name, level, operation, correct, waves } → { entry, position, board }
 ```
 
-**Escritura segura.** El archivo se escribe con patrón temporal + `rename`, que es atómico en el sistema de archivos: si el proceso muere a mitad de la escritura, `scores.json` queda intacto en su versión anterior en vez de truncado. Las escrituras pasan por una cola en memoria para que dos partidas que terminan al mismo tiempo no se pisen.
+**Escritura segura.** El archivo se escribe con patrón temporal + `rename`, que es atómico en el sistema de archivos: si el proceso muere a mitad de la escritura, `scores.json` queda intacto. Las escrituras pasan por una cola en memoria para que dos partidas que terminan al mismo tiempo no se pisen.
 
-**Validación en el servidor.** El cliente no es confiable ni siquiera cuando el usuario tiene ocho años. El servidor recorta el nombre, verifica que `level` sea uno de los tres válidos y que `correct` y `waves` sean enteros positivos dentro de un rango razonable.
+**Validación en el servidor.** El cliente no es confiable ni siquiera cuando el usuario tiene ocho años. El servidor recorta el nombre, verifica que `level` y `operation` sean válidos y que `correct` y `waves` sean enteros entre 0 y 10000.
 
 ### Reglas de ordenamiento
 
 - Se ordena por `correct` descendente; en empate, gana la partida más antigua.
-- Se conservan las 20 mejores por nivel en el archivo, se muestran las 10 primeras.
-- La partida recién jugada se resalta en la tabla aunque no entre al top 10, con su posición real ("#23").
-- Los rankings son independientes por nivel: no tiene sentido comparar 40 aciertos en fácil con 12 en difícil.
+- Se conservan las 20 mejores por tabla en el archivo, se muestran las 10 primeras.
+- La partida recién jugada se resalta en la tabla aunque no entre al top 10, con su posición real ("#17"). Una partida peor que las 20 conservadas queda en la posición 21.
+- Las tablas son independientes: no tiene sentido comparar 40 aciertos en fácil con 12 en difícil, ni multiplicar con dividir.
 
 ### Si el servidor no responde
 
-`ScoreRepository` es una interfaz con dos implementaciones: `HttpScoreRepository` (la normal) y `LocalScoreRepository` (respaldo en `localStorage`). Si el POST falla, la puntuación se guarda localmente, la pantalla de ranking avisa que está mostrando datos locales, y se reintenta el envío al abrir el juego la próxima vez.
+`ScoreRepository` es una interfaz con dos implementaciones: `HttpScoreRepository` (la normal) y `LocalScoreRepository` (respaldo en `localStorage`). `ScoreService` las combina: si el POST falla, la puntuación se guarda localmente y se encola; la pantalla de ranking avisa que está mostrando datos locales; al abrir el juego la próxima vez se reintenta el envío.
 
 Sin esto, un niño que juega bien y pierde su puntaje por un problema de red no vuelve a jugar.
 
 ### Saneamiento del nombre
 
-Recortar espacios, limitar longitud, y como es un juego para niños, filtrar una lista corta de palabras vetadas antes de guardar. El filtro va en el servidor.
+Recortar espacios, limitar longitud y, como es un juego para niños, sustituir por asteriscos una lista corta de palabras vetadas antes de guardar. El filtro va en el servidor (`server/badwords.ts`).
 
 ---
 
@@ -589,30 +614,33 @@ multiplicon/
 ├── data/
 │   └── scores.json              ← ranking persistido (volumen en Dokploy)
 ├── server/
-│   ├── index.ts                 Hono: estáticos + API
+│   ├── index.ts                 arranque: puerto, DATA_DIR, DIST_DIR
+│   ├── app.ts                   rutas /api y estáticos de dist/
 │   ├── scoreStore.ts            lectura/escritura atómica con cola
-│   └── validation.ts
+│   ├── validation.ts            saneamiento y validación
+│   └── badwords.ts
+├── scripts/
+│   └── fetch-trainers.mjs       descarga los sprites de líderes (una vez)
 ├── public/
 │   └── assets/
-│       ├── medieval/            bg-*.svg, hero.svg, monster-a|b|c.svg, ui/
-│       ├── undead/
-│       ├── alien/
+│       ├── trainers/            sprites de líderes (versionados)
+│       ├── gyms/                fondos, marcos y corazones por gimnasio (fase 4)
 │       ├── shared/              numpad, efectos, iconos
 │       ├── audio/
-│       │   ├── music/           catálogo por tema, 2 capas × 2 formatos
-│       │   └── sfx/             correct/ como catálogo, resto plano
 │       └── fonts/
 ├── src/
 │   ├── main.ts                  configuración de Phaser
+│   ├── types.ts
 │   ├── config/
-│   │   ├── difficulties.ts      las tres DifficultyConfig
-│   │   ├── themes.ts            paletas, fuentes y rutas de assets por tema
-│   │   └── feedback.ts          catálogo de música, sonido de acierto y textos de fallo
+│   │   ├── difficulties.ts      niveles, curva de tiempo y vida del monstruo
+│   │   ├── trainers.ts          líderes disponibles
+│   │   ├── themes.ts            paletas, fuentes y rutas de assets por gimnasio (fase 4)
+│   │   └── feedback.ts          catálogo de música, sonido de acierto y textos de fallo (fase 5)
 │   ├── scenes/
-│   │   ├── BootScene.ts
 │   │   ├── PreloadScene.ts
 │   │   ├── TitleScene.ts
 │   │   ├── NameScene.ts
+│   │   ├── TrainerSelectScene.ts
 │   │   ├── LevelSelectScene.ts
 │   │   ├── BattleScene.ts
 │   │   ├── ResultScene.ts
@@ -620,30 +648,27 @@ multiplicon/
 │   ├── systems/
 │   │   ├── ProblemGenerator.ts  generación y validación de operaciones
 │   │   ├── BattleState.ts       corazones, oleadas, aciertos, temporizador
-│   │   ├── AudioManager.ts      pistas, capa de tensión, ducking, preferencias
-│   │   └── FeedbackSettings.ts  lectura, validación y persistencia de ajustes
-│   │   └── scores/
-│   │       ├── ScoreRepository.ts   interfaz
-│   │       ├── HttpScoreRepository.ts
-│   │       └── LocalScoreRepository.ts
-│   ├── ui/
-│   │   ├── NumPad.ts
-│   │   ├── HeartBar.ts
-│   │   ├── TimerBar.ts
-│   │   ├── ProblemDisplay.ts
-│   │   ├── MissLabel.ts         aviso de fallo, animación y reinicio
-│   │   └── CharacterRig.ts      montaje y tweens de las piezas SVG
-│   └── types.ts
-├── Dockerfile
+│   │   ├── Preferences.ts       nombre y entrenador recordados
+│   │   ├── pokemon/PokeApi.ts   nombre e ilustración con caché y fallback
+│   │   ├── scores/              ScoreRepository, Http, Local, ScoreService
+│   │   ├── AudioManager.ts      (fase 5)
+│   │   └── FeedbackSettings.ts  (fase 5)
+│   └── ui/
+│       ├── HeroView.ts          sprite del líder y sus tweens
+│       ├── MonsterView.ts       ilustración del Pokémon, nombre y vida
+│       ├── Button.ts / keys.ts / style.ts
+│       ├── NumPad.ts            (fase 4)
+│       └── MissLabel.ts         (fase 4)
+├── Dockerfile                   multi-etapa: build de Vite + tsc del servidor
 ├── vite.config.ts               proxy /api → localhost:8787 en desarrollo
 └── package.json
 ```
 
-`ProblemGenerator` y `BattleState` no importan nada de Phaser. Así se prueban con Vitest sin levantar un canvas, que es donde está toda la lógica que realmente puede fallar.
+`ProblemGenerator`, `BattleState`, `PokeApi`, los repositorios de ranking y todo `server/` no importan nada de Phaser. Así se prueban con Vitest sin levantar un canvas, que es donde está toda la lógica que realmente puede fallar.
 
 ### Deploy en Dokploy
 
-Dockerfile multi-etapa: build de Vite, luego imagen Node con el servidor Hono sirviendo `dist/`. En Dokploy se monta un volumen en `/app/data` para que `scores.json` sobreviva a los redeploys.
+Dockerfile multi-etapa: build de Vite y del servidor, luego imagen Node de producción que sirve `dist/` y la API. En Dokploy se monta un volumen en `/app/data` para que `scores.json` sobreviva a los redeploys.
 
 **Antes del primer deploy:** verificar que el volumen esté montado. Sin él, cada redeploy borra el ranking completo y no hay forma de recuperarlo.
 
@@ -651,28 +676,26 @@ Dockerfile multi-etapa: build de Vite, luego imagen Node con el servidor Hono si
 
 ## 12. Fases de desarrollo
 
-### Fase 1 — Núcleo jugable (sin arte)
+### Fase 1 — Núcleo jugable (sin arte) ✔
 Proyecto Vite + Phaser + TS. `ProblemGenerator` con sus tres configuraciones y pruebas unitarias. `BattleScene` con rectángulos de color: operación, temporizador, corazones, entrada por teclado. El bucle completo funciona y se puede perder.
 
-*Al final de esta fase el juego ya es evaluable como juego. Todo lo demás es presentación.*
+### Fase 2 — Estructura de partida ✔
+Vidas del monstruo, oleadas sin límite, reducción de tiempo con su piso. Pantallas de título, nombre, selección de nivel y resultado. Historial de operaciones falladas.
 
-### Fase 2 — Estructura de partida
-Vidas del monstruo, oleadas sin límite, reducción de tiempo con su piso. Pantallas de nombre, selección de nivel y resultado. Historial de operaciones falladas.
-
-### Fase 3 — Ranking
-Servidor Hono con las dos rutas y escritura atómica. `ScoreRepository` con sus dos implementaciones. Pantalla de ranking con pestañas por nivel y resaltado de la partida actual. Dockerfile y primer deploy en Dokploy con el volumen.
+### Fase 3 — Ranking, deploy y personajes Pokémon ✔
+Servidor Hono con las rutas y escritura atómica. `ScoreRepository` con sus dos implementaciones y reintento de pendientes. Pantalla de ranking con pestañas por nivel y resaltado de la partida actual. Integración con PokéAPI: Pokémon aleatorio por oleada con nombre en español e ilustración precargada; galería de líderes de gimnasio como héroe. Dockerfile y primer deploy en Dokploy con el volumen.
 
 *Conviene desplegar aquí y no al final: los problemas de volumen y rutas estáticas aparecen en el primer deploy, y es mejor encontrarlos cuando el proyecto todavía es simple.*
 
-### Fase 4 — Assets e identidad visual
-Producción de los SVG por tema: fondos en tres capas, héroe, tres monstruos, marcos de interfaz, corazones. `CharacterRig` para montar y animar las piezas. Sistema de temas aplicado a toda la interfaz. Teclado numérico en pantalla. Sacudidas, destellos, transiciones y `MissLabel` con el texto por defecto.
-
-*El aviso de fallo entra aquí y no en la fase 5: es la única retroalimentación de error del juego, así que no puede esperar a la fase de audio.*
+### Fase 4 — Operación, arte de gimnasios y teclado en pantalla
+- **Elección de operación** en la pantalla de nivel: multiplicar o dividir. División exacta `(a·b) ÷ b` con el doble de tiempo por operación en todos los niveles (sección 4). `Problem.text` ya lo permite sin tocar `BattleScene`. El ranking usa las tablas `dividir:*` que ya existen.
+- Producción de los SVG por gimnasio: fondos en tres capas, marcos de interfaz, corazones. Sistema de temas (`config/themes.ts`) aplicado a toda la interfaz. Tipografía Atkinson Hyperlegible con precarga.
+- Teclado numérico en pantalla para tablet. Sacudidas, destellos, transiciones y `MissLabel` como componente.
 
 ### Fase 5 — Audio y pulido
-`AudioManager` con precarga selectiva, capa de tensión y ducking. Catálogo en `config/feedback.ts` y `SettingsScene` con prueba de cada sonido y del texto de fallo. Selección y licenciamiento de las pistas y efectos, normalización de `gain` de cada uno, y su `CREDITS.md`. Verificación del arranque tras el primer clic en los cuatro navegadores.
+`AudioManager` con precarga selectiva, capa de tensión y ducking. Catálogo en `config/feedback.ts` y `SettingsScene` con prueba de cada sonido y del texto de fallo. Selección y licenciamiento de las pistas y efectos, normalización de `gain`, y `CREDITS.md`. Verificación del arranque tras el primer clic en los cuatro navegadores.
 
-Pruebas en tablet. Ajuste de tiempos y curva de dificultad con niños reales, que es lo único que va a decir si 7 segundos son muchos o pocos, y sesiones largas para confirmar que los loops aguantan veinte minutos sin cansar.
+Pruebas en tablet. Ajuste de tiempos y curva de dificultad con niños reales, y sesiones largas para confirmar que los loops aguantan veinte minutos sin cansar.
 
 ### Fase 6 — Publicación
 Optimización de assets, `manifest.json` para instalación como app, dominio y HTTPS en Dokploy.
@@ -694,7 +717,8 @@ Optimización de assets, `manifest.json` para instalación como app, dominio y H
 
 Fuera del alcance de la v1, anotado para no cerrarle la puerta:
 
-- **Dos jugadores en el mismo dispositivo.** Turnos alternados contra el mismo monstruo, o marcadores separados en pantalla dividida. Afecta el modelo de partida y el ranking, así que conviene decidir la forma antes de empezarlo, no durante.
-- **Otras operaciones.** Sumas, restas, divisiones. `Problem` ya expone `text` y `answer` en vez de dos operandos, así que agregar un generador nuevo no obliga a tocar `BattleScene`.
+- **Dos jugadores en el mismo dispositivo.** Turnos alternados contra el mismo Pokémon, o marcadores separados en pantalla dividida. Afecta el modelo de partida y el ranking, así que conviene decidir la forma antes de empezarlo, no durante.
+- **Sumas y restas.** `Problem` ya expone `text` y `answer`, y el ranking ya separa por operación, así que agregar un generador nuevo no obliga a tocar `BattleScene`.
 - **Panel para docentes.** Ver el historial de operaciones falladas por niño y detectar qué tabla se le dificulta. Los datos ya se recogen durante la partida; falta persistirlos y mostrarlos.
 - **Ranking por curso.** Separar los rankings con un identificador de grupo para que compitan solo entre compañeros.
+- **Arte propio en lugar de Pokémon** si el juego se quisiera distribuir comercialmente: `HeroView` y `MonsterView` aceptan cualquier textura.

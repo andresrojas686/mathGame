@@ -1,4 +1,4 @@
-import type { DifficultyConfig, Problem, Rng } from '../types';
+import type { DifficultyConfig, Operation, Problem, Rng } from '../types';
 
 /** Entero uniforme en [min, max], ambos incluidos. */
 export function randomInt(min: number, max: number, rng: Rng): number {
@@ -32,16 +32,60 @@ function buildProblem(cfg: DifficultyConfig, rng: Rng): Problem {
   return { text: `${a} × ${b}`, answer: a * b, operands: [a, b] };
 }
 
+function withoutRepeat(build: () => Problem, previous: Problem | undefined): Problem {
+  let problem = build();
+  // Con rangos de al menos 8 valores la repetición es rara; el bucle acotado evita
+  // colgarse si alguien configura un nivel degenerado.
+  for (let i = 0; i < 20 && sameProblem(previous, problem); i++) problem = build();
+  return problem;
+}
+
 /**
  * Genera una multiplicación para el nivel. Nunca repite la operación anterior.
  * `rng` es inyectable para pruebas deterministas.
  */
 export function generateProblem(cfg: DifficultyConfig, previous?: Problem, rng: Rng = Math.random): Problem {
-  let problem = buildProblem(cfg, rng);
-  // Con rangos de al menos 8 valores la repetición es rara; el bucle acotado evita
-  // colgarse si alguien configura un nivel degenerado.
-  for (let i = 0; i < 20 && sameProblem(previous, problem); i++) {
-    problem = buildProblem(cfg, rng);
+  return withoutRepeat(() => buildProblem(cfg, rng), previous);
+}
+
+/** Rango de cocientes q ≥ 2 tales que q·b tiene exactamente `dividendDigits` cifras. Vacío si no existe. */
+export function quotientRange(divisor: number, dividendDigits: number): { min: number; max: number } | null {
+  const lo = 10 ** (dividendDigits - 1);
+  const hi = 10 ** dividendDigits - 1;
+  const min = Math.max(2, Math.ceil(lo / divisor));
+  const max = Math.floor(hi / divisor);
+  return max >= min ? { min, max } : null;
+}
+
+function buildDivision(cfg: DifficultyConfig, rng: Rng): Problem {
+  const dividendDigits = pick(cfg.dividendDigits, rng);
+  // El divisor nunca tiene más cifras que el dividendo.
+  const allowed = cfg.divisorDigits.filter((d) => d <= dividendDigits);
+  const divisorDigits = pick(allowed.length ? allowed : [Math.min(...cfg.divisorDigits)], rng);
+
+  // Algunos divisores concretos no admiten cociente (ej. 2 cifras entre 99): se vuelve a sortear.
+  for (let i = 0; i < 50; i++) {
+    const b = randomWithDigits(divisorDigits, rng);
+    const range = quotientRange(b, dividendDigits);
+    if (!range) continue;
+    const q = randomInt(range.min, range.max, rng);
+    return { text: `${q * b} ÷ ${b}`, answer: q, operands: [q * b, b] };
   }
-  return problem;
+  // Último recurso, siempre válido: el divisor mínimo de esas cifras.
+  const b = divisorDigits === 1 ? 2 : 10 ** (divisorDigits - 1);
+  const range = quotientRange(b, dividendDigits) ?? { min: 2, max: 2 };
+  const q = randomInt(range.min, range.max, rng);
+  return { text: `${q * b} ÷ ${b}`, answer: q, operands: [q * b, b] };
+}
+
+/**
+ * Genera una división exacta para el nivel: `q·b ÷ b`, respuesta `q ≥ 2`, con las cifras
+ * del dividendo y del divisor definidas en la configuración. Nunca repite la operación anterior.
+ */
+export function generateDivisionProblem(cfg: DifficultyConfig, previous?: Problem, rng: Rng = Math.random): Problem {
+  return withoutRepeat(() => buildDivision(cfg, rng), previous);
+}
+
+export function generateProblemFor(operation: Operation, cfg: DifficultyConfig, previous?: Problem, rng: Rng = Math.random): Problem {
+  return operation === 'dividir' ? generateDivisionProblem(cfg, previous, rng) : generateProblem(cfg, previous, rng);
 }

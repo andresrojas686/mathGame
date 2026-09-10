@@ -1,0 +1,7 @@
+{
+  "permissions": {
+    "allow": [
+      "PowerShell(node \"C:\\\\Users\\\\ANDRES~1\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\c--ACR-Math\\\\a7cfcf6b-f4fc-444d-8be9-637fa0e440e9\\\\scratchpad\\\\plan-sections.mjs\"; Select-String -Path C:\\\\ACR\\\\Math\\\\plan.md -Pattern '^##' | ForEach-Object { $_.Line })"
+    ]
+  }
+}

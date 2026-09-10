@@ -73,6 +73,6 @@ export class NameScene extends Phaser.Scene {
       return;
     }
     saveLastName(name);
-    this.scene.start('LevelSelect', { name });
+    this.scene.start('TrainerSelect', { name });
   }
 }

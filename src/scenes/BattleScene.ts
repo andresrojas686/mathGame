@@ -1,8 +1,12 @@
 import Phaser from 'phaser';
 import { DIFFICULTIES, DIFFICULTY_LABELS, isDifficultyId } from '../config/difficulties';
+import { DEFAULT_TRAINER_ID } from '../config/trainers';
 import { BattleState } from '../systems/BattleState';
-import type { BattleParams, DifficultyId, Problem, ResultParams } from '../types';
+import { fetchPokemonInfo, randomPokemonId, type PokemonInfo } from '../systems/pokemon/PokeApi';
+import type { BattleParams, DifficultyId, Operation, Problem, ResultParams } from '../types';
+import { HeroView } from '../ui/HeroView';
 import { bindWindowKeys, isDigitKey } from '../ui/keys';
+import { MonsterView } from '../ui/MonsterView';
 import { COLORS, H, NUMBER_FONT, prefersReducedMotion, UI_FONT, W } from '../ui/style';
 
 /** Máximo de cifras de un resultado: 99999 × 999 = 99 899 001 → 8 cifras. Una de margen. */
@@ -14,12 +18,19 @@ const GAME_OVER_DELAY_MS = 1400;
 export class BattleScene extends Phaser.Scene {
   private state!: BattleState;
   private difficulty!: DifficultyId;
+  private operation: Operation = 'multiplicar';
   private playerName = '';
+  private trainerId = DEFAULT_TRAINER_ID;
   private reducedMotion = false;
 
   private input$ = '';
   private paused = false;
   private revealMsLeft = 0;
+
+  /** Pokémon en pantalla y el siguiente, ya pedido para que el cambio de oleada sea inmediato. */
+  private nextPokemon: Promise<PokemonInfo> | null = null;
+  private defeatedNames: string[] = [];
+  private usedIds = new Set<number>();
 
   private hearts: Phaser.GameObjects.Rectangle[] = [];
   private correctText!: Phaser.GameObjects.Text;
@@ -31,12 +42,8 @@ export class BattleScene extends Phaser.Scene {
   private answerGroup!: Phaser.GameObjects.Container;
   private missLabel!: Phaser.GameObjects.Text;
   private pauseLabel!: Phaser.GameObjects.Text;
-  private hero!: Phaser.GameObjects.Rectangle;
-  private monster!: Phaser.GameObjects.Rectangle;
-  private monsterGroup!: Phaser.GameObjects.Container;
-  private hpFill!: Phaser.GameObjects.Rectangle;
-  private hpWidth = 200;
-  private hpText!: Phaser.GameObjects.Text;
+  private hero!: HeroView;
+  private monster!: MonsterView;
 
   constructor() {
     super('Battle');
@@ -45,12 +52,17 @@ export class BattleScene extends Phaser.Scene {
   init(data: Partial<BattleParams>): void {
     const param = new URLSearchParams(window.location.search).get('level');
     this.difficulty = data.level ?? (isDifficultyId(param) ? param : 'facil');
+    this.operation = data.operation ?? 'multiplicar';
     this.playerName = data.name ?? 'Jugador';
+    this.trainerId = data.trainer ?? DEFAULT_TRAINER_ID;
     this.state = new BattleState(DIFFICULTIES[this.difficulty]);
     this.input$ = '';
     this.paused = false;
     this.revealMsLeft = 0;
     this.hearts = [];
+    this.nextPokemon = null;
+    this.defeatedNames = [];
+    this.usedIds = new Set();
     this.reducedMotion = prefersReducedMotion();
   }
 
@@ -63,6 +75,7 @@ export class BattleScene extends Phaser.Scene {
     bindWindowKeys(this, (e) => this.onKey(e));
     this.bindFocus();
     this.renderAll();
+    void this.spawnFirstPokemon();
   }
 
   override update(time: number, delta: number): void {
@@ -82,6 +95,30 @@ export class BattleScene extends Phaser.Scene {
     else if (result.type === 'gameover') this.onGameOver(result.lost);
   }
 
+  // ---------- Pokémon ----------
+
+  private requestPokemon(): Promise<PokemonInfo> {
+    let id = randomPokemonId();
+    // Evita repetir dentro de la misma partida mientras haya de sobra.
+    for (let i = 0; i < 10 && this.usedIds.has(id); i++) id = randomPokemonId();
+    this.usedIds.add(id);
+    return fetchPokemonInfo(id);
+  }
+
+  private async spawnFirstPokemon(): Promise<void> {
+    const first = await this.requestPokemon();
+    if (!this.scene.isActive()) return;
+    this.monster.show(first);
+    this.prefetchNext();
+  }
+
+  private prefetchNext(): void {
+    this.nextPokemon = this.requestPokemon().then((info) => {
+      if (this.scene.isActive()) this.monster.preload(info);
+      return info;
+    });
+  }
+
   // ---------- construcción ----------
 
   private buildHud(): void {
@@ -91,18 +128,10 @@ export class BattleScene extends Phaser.Scene {
     for (let i = 0; i < cfg.hearts; i++) {
       this.hearts.push(this.add.rectangle(40 + size / 2 + i * step, 48, size, size, COLORS.heartOn));
     }
-    this.correctText = this.add
-      .text(W - 40, 40, '', { fontFamily: UI_FONT, fontSize: '32px', color: COLORS.text })
-      .setOrigin(1, 0.5);
-    this.waveText = this.add
-      .text(W - 40, 74, '', { fontFamily: UI_FONT, fontSize: '20px', color: COLORS.muted })
-      .setOrigin(1, 0.5);
+    this.correctText = this.add.text(W - 40, 40, '', { fontFamily: UI_FONT, fontSize: '32px', color: COLORS.text }).setOrigin(1, 0.5);
+    this.waveText = this.add.text(W - 40, 74, '', { fontFamily: UI_FONT, fontSize: '20px', color: COLORS.muted }).setOrigin(1, 0.5);
     this.add
-      .text(W / 2, 48, `${this.playerName} · ${DIFFICULTY_LABELS[this.difficulty].title}`, {
-        fontFamily: UI_FONT,
-        fontSize: '20px',
-        color: COLORS.muted,
-      })
+      .text(W / 2, 48, `${this.playerName} · ${DIFFICULTY_LABELS[this.difficulty].title}`, { fontFamily: UI_FONT, fontSize: '20px', color: COLORS.muted })
       .setOrigin(0.5);
     this.pauseLabel = this.add
       .text(W / 2, H / 2, 'PAUSA', { fontFamily: UI_FONT, fontSize: '64px', color: COLORS.text })
@@ -112,25 +141,15 @@ export class BattleScene extends Phaser.Scene {
   }
 
   private buildStage(): void {
-    this.hero = this.add.rectangle(200, 330, 120, 180, COLORS.hero);
-    this.add.text(200, 440, 'héroe', { fontFamily: UI_FONT, fontSize: '18px', color: COLORS.muted }).setOrigin(0.5);
-
-    this.monster = this.add.rectangle(0, 0, 160, 200, COLORS.monster);
-    const hpTrack = this.add.rectangle(0, -130, this.hpWidth, 16, COLORS.hpTrack);
-    this.hpFill = this.add.rectangle(-this.hpWidth / 2, -130, this.hpWidth, 16, COLORS.hpFill).setOrigin(0, 0.5);
-    this.hpText = this.add.text(0, -152, '', { fontFamily: UI_FONT, fontSize: '16px', color: COLORS.muted }).setOrigin(0.5);
-    this.monsterGroup = this.add.container(1080, 330, [this.monster, hpTrack, this.hpFill, this.hpText]);
-
+    this.hero = new HeroView(this, 200, 330, this.trainerId, this.reducedMotion);
+    this.monster = new MonsterView(this, 1080, 340, this.reducedMotion);
     if (!this.reducedMotion) {
-      this.tweens.add({ targets: [this.hero, this.monsterGroup], y: '+=8', duration: 900, yoyo: true, repeat: -1, ease: 'Sine.inOut' });
+      this.tweens.add({ targets: this.hero, y: '+=8', duration: 900, yoyo: true, repeat: -1, ease: 'Sine.inOut' });
     }
   }
 
   private buildProblem(): void {
-    this.problemText = this.add
-      .text(W / 2, 290, '', { fontFamily: NUMBER_FONT, fontSize: '96px', color: COLORS.text })
-      .setOrigin(0.5);
-
+    this.problemText = this.add.text(W / 2, 290, '', { fontFamily: NUMBER_FONT, fontSize: '96px', color: COLORS.text }).setOrigin(0.5);
     const y = 370;
     this.add.rectangle(W / 2, y, this.timerWidth, 24, COLORS.timerTrack);
     this.timerFill = this.add.rectangle(W / 2 - this.timerWidth / 2, y, this.timerWidth, 24, COLORS.timer).setOrigin(0, 0.5);
@@ -138,9 +157,7 @@ export class BattleScene extends Phaser.Scene {
 
   private buildAnswer(): void {
     const box = this.add.rectangle(0, 0, 420, 84, COLORS.field).setStrokeStyle(3, COLORS.fieldBorder);
-    this.answerText = this.add
-      .text(0, 0, '', { fontFamily: NUMBER_FONT, fontSize: '56px', color: COLORS.text })
-      .setOrigin(0.5);
+    this.answerText = this.add.text(0, 0, '', { fontFamily: NUMBER_FONT, fontSize: '56px', color: COLORS.text }).setOrigin(0.5);
     this.answerGroup = this.add.container(W / 2, 500, [box, this.answerText]);
 
     this.missLabel = this.add
@@ -210,30 +227,23 @@ export class BattleScene extends Phaser.Scene {
   private onCorrect(): void {
     this.renderHud();
     this.renderProblem();
-    if (this.reducedMotion) return;
-    this.tweens.add({ targets: this.hero, x: 260, duration: 120, yoyo: true, ease: 'Quad.out' });
-    this.tweens.add({ targets: this.monsterGroup, x: 1110, duration: 120, yoyo: true, delay: 100, ease: 'Quad.out' });
-    this.flash(this.monster);
+    this.hero.attack();
+    this.monster.hit();
   }
 
-  /** El monstruo cae y entra el siguiente, más resistente. La siguiente operación ya está en pantalla. */
+  /** El Pokémon cae y entra el siguiente, más resistente. La siguiente operación ya está en pantalla. */
   private onMonsterDefeated(): void {
+    this.defeatedNames.push(this.monster.pokemonName);
     this.renderHud();
     this.renderProblem();
-    if (this.reducedMotion) return;
-    this.tweens.add({ targets: this.hero, x: 260, duration: 120, yoyo: true, ease: 'Quad.out' });
-    this.tweens.killTweensOf(this.monsterGroup);
-    this.tweens.add({
-      targets: this.monsterGroup,
-      x: 1400,
-      alpha: 0,
-      duration: 250,
-      ease: 'Quad.in',
-      onComplete: () => {
-        this.monsterGroup.setX(1400).setAlpha(1);
-        this.tweens.add({ targets: this.monsterGroup, x: 1080, duration: 300, ease: 'Back.out' });
-        this.tweens.add({ targets: [this.hero, this.monsterGroup], y: '+=8', duration: 900, yoyo: true, repeat: -1, ease: 'Sine.inOut', delay: 300 });
-      },
+    this.hero.attack();
+
+    const pending = this.nextPokemon ?? this.requestPokemon();
+    this.nextPokemon = null;
+    void pending.then((next) => {
+      if (!this.scene.isActive()) return;
+      this.monster.swapTo(next, () => this.renderHud());
+      this.prefetchNext();
     });
   }
 
@@ -265,26 +275,26 @@ export class BattleScene extends Phaser.Scene {
     this.renderAnswer();
     this.renderHud();
     this.showReveal(lost);
-    if (!this.reducedMotion) {
-      this.cameras.main.shake(250, 0.012);
-      this.tweens.add({ targets: this.monsterGroup, x: 900, duration: 140, yoyo: true, ease: 'Quad.out' });
-      this.flash(this.hero);
-    }
+    if (!this.reducedMotion) this.cameras.main.shake(250, 0.012);
+    this.monster.lunge();
+    this.hero.hit();
   }
 
   private onGameOver(lost: Problem): void {
     this.renderHud();
     this.showReveal(lost);
     if (!this.reducedMotion) this.cameras.main.shake(400, 0.02);
-    this.add.rectangle(W / 2, H / 2, W, H, 0x000000, 0).setDepth(90);
     this.tweens.add({ targets: this.cameras.main, alpha: 0, duration: 600, delay: GAME_OVER_DELAY_MS - 600 });
     this.time.delayedCall(GAME_OVER_DELAY_MS, () => {
       const params: ResultParams = {
         level: this.difficulty,
+        operation: this.operation,
         name: this.playerName,
+        trainer: this.trainerId,
         correct: this.state.correct,
         waves: this.state.wavesCleared,
         history: this.state.history,
+        defeated: this.defeatedNames,
       };
       this.cameras.main.setAlpha(1);
       this.scene.start('Result', params);
@@ -311,8 +321,7 @@ export class BattleScene extends Phaser.Scene {
     this.hearts.forEach((h, i) => h.setFillStyle(i < s.hearts ? COLORS.heartOn : COLORS.heartOff));
     this.correctText.setText(`Aciertos: ${s.correct}`);
     this.waveText.setText(`Oleada ${s.wave} · ${s.timeLimit} s`);
-    this.hpFill.width = this.hpWidth * (s.monsterHp / s.monsterMaxHp);
-    this.hpText.setText(`monstruo ${s.monsterHp} / ${s.monsterMaxHp}`);
+    this.monster.setHp(s.monsterHp, s.monsterMaxHp);
   }
 
   private renderProblem(): void {
@@ -337,11 +346,5 @@ export class BattleScene extends Phaser.Scene {
     const low = this.state.timeLeft < 2;
     this.timerFill.setFillStyle(low ? COLORS.timerLow : COLORS.timer);
     this.timerFill.setAlpha(low && !this.reducedMotion ? 0.65 + 0.35 * Math.sin(time / 70) : 1);
-  }
-
-  private flash(target: Phaser.GameObjects.Rectangle): void {
-    const original = target.fillColor;
-    target.setFillStyle(0xffffff);
-    this.time.delayedCall(90, () => target.setFillStyle(original));
   }
 }

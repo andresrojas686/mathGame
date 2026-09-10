@@ -5,17 +5,30 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc --noEmit && vite build",
+    "dev:server": "tsx watch server/index.ts",
+    "build": "tsc --noEmit && vite build && pnpm build:server",
+    "build:server": "tsc -p tsconfig.server.json",
+    "start": "node dist-server/index.js",
     "preview": "vite preview",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "fetch-trainers": "node scripts/fetch-trainers.mjs"
   },
   "dependencies": {
+    "@hono/node-server": "^2.1.1",
+    "hono": "^4.13.7",
     "phaser": "^3.90.0"
   },
   "devDependencies": {
+    "@types/node": "^22.20.2",
+    "tsx": "^4.23.13",
     "typescript": "^7.0.2",
     "vite": "^8.2.2",
     "vitest": "^5.0.0"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "esbuild"
+    ]
   }
 }

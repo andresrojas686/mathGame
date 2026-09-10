@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { DIFFICULTIES, DIFFICULTY_IDS } from '../config/difficulties';
-import { generateProblem, randomWithDigits, sameProblem } from './ProblemGenerator';
+import { generateDivisionProblem, generateProblem, generateProblemFor, quotientRange, randomWithDigits, sameProblem } from './ProblemGenerator';
 import { seededRng } from './testRng';
 import type { Problem } from '../types';
 
@@ -64,6 +64,12 @@ describe('generateProblem', () => {
       seen.add(`${digitsOf(p.operands[0]!)}x${digitsOf(p.operands[1]!)}`);
     }
     expect(seen.size).toBe(cfg.multiplicandDigits.length * cfg.multiplierDigits.length);
+  });
+
+  it('generateProblemFor elige el generador por operación', () => {
+    const cfg = DIFFICULTIES.facil;
+    expect(generateProblemFor('multiplicar', cfg, undefined, seededRng(1)).text).toContain('×');
+    expect(generateProblemFor('dividir', cfg, undefined, seededRng(1)).text).toContain('÷');
   });
 
   it('no repite la operación anterior aunque el rng insista', () => {

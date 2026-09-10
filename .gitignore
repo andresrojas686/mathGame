@@ -3,5 +3,6 @@ dist/
 dist-server/
 data/scores.json
 data/*.tmp
+.claude/
 .DS_Store
 *.log

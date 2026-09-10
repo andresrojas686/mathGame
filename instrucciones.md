@@ -2,21 +2,49 @@
 
 Estado actual: **v1 completa** (fases 1 a 6 de `plan.md`). Multiplicación y división, tres gimnasios Pokémon con arte propio, teclado en pantalla, audio sintetizado con ajustes, ranking con servidor y manifest para instalar como app.
 
+## Arranque rápido (5 comandos)
+
+```bash
+git clone https://github.com/andresrojas686/mathGame.git
+cd mathGame
+pnpm install
+pnpm dev:server        # terminal 1: API del ranking en el puerto 8787
+pnpm dev               # terminal 2: juego en http://localhost:5173
+```
+
+Abre `http://localhost:5173/` en Chrome, Edge, Firefox o Safari. El resto de este documento explica cada paso.
+
+## Instalar en otro PC desde cero
+
+1. **Git.** Descárgalo de https://git-scm.com si no está instalado. Comprueba con `git --version`.
+2. **Node 22 o superior.** Descárgalo de https://nodejs.org (versión LTS). Comprueba con `node --version`.
+3. **pnpm 10 o superior.** Con Node instalado:
+   ```bash
+   npm install -g pnpm
+   pnpm --version
+   ```
+4. **Obtener el proyecto.**
+   ```bash
+   git clone https://github.com/andresrojas686/mathGame.git
+   cd mathGame
+   ```
+   Si no usas git, en GitHub pulsa "Code → Download ZIP", descomprime y entra en la carpeta.
+5. **Instalar dependencias.** Desde la raíz del proyecto:
+   ```bash
+   pnpm install
+   ```
+   Instala Phaser, Vite, TypeScript, Vitest, Hono y tsx según `pnpm-lock.yaml`. La única dependencia con script de instalación (esbuild) ya está aprobada en `package.json`, así que no pregunta nada.
+
+No hace falta descargar nada más: los sprites de líderes, la tipografía, los fondos y los iconos están versionados en `public/`. Si alguna vez hiciera falta regenerarlos: `pnpm fetch-trainers` y `node scripts/fetch-fonts.mjs`.
+
+Funciona igual en Windows, macOS y Linux. No requiere Docker en el PC de desarrollo.
+
 ## Requisitos
 
 - Node 22 o superior
-- pnpm 10 o superior (`npm install -g pnpm` si no lo tienes)
+- pnpm 10 o superior
 - Conexión a internet para ver los Pokémon (sin red el juego funciona igual, con rectángulos)
-
-## Instalación
-
-Desde la raíz del proyecto:
-
-```bash
-pnpm install
-```
-
-Los sprites de líderes y la tipografía ya están versionados. Si hiciera falta regenerarlos: `pnpm fetch-trainers` y `node scripts/fetch-fonts.mjs`.
+- Un navegador moderno. En tablet, usar en horizontal.
 
 ## Lanzar en desarrollo
 
@@ -139,6 +167,21 @@ localStorage.getItem('multiplicon.operation')  // última operación
 $c = Get-NetTCPConnection -LocalPort 5173 -State Listen; Stop-Process -Id $c.OwningProcess -Force
 $c = Get-NetTCPConnection -LocalPort 8787 -State Listen; Stop-Process -Id $c.OwningProcess -Force
 ```
+
+En macOS o Linux: `lsof -ti:5173 | xargs kill` y `lsof -ti:8787 | xargs kill`.
+
+## Problemas frecuentes
+
+| Síntoma | Causa y solución |
+|---|---|
+| `pnpm: command not found` | pnpm no está instalado o la terminal no se reinició tras instalarlo. `npm install -g pnpm` y abre una terminal nueva. |
+| `pnpm install` falla por versión de Node | Necesita Node 22 o superior. `node --version` y actualiza desde nodejs.org. |
+| `Port 5173 is in use` | Otro `pnpm dev` sigue abierto. Ciérralo o usa `pnpm dev --port 5174` (el proxy a la API sigue funcionando). |
+| El ranking dice "sin conexión con el servidor" | No está corriendo `pnpm dev:server` en la otra terminal. Las puntuaciones se guardan en el navegador y se envían solas cuando el servidor vuelva. |
+| El enemigo es un rectángulo con "Pokémon #n" | Sin acceso a pokeapi.co o a raw.githubusercontent.com (red, proxy o cortafuegos). El juego funciona igual. |
+| No suena nada | El navegador bloquea el audio hasta el primer clic o tecla. Comprueba también el botón de silencio de la esquina y los volúmenes en Ajustes. |
+| El texto sale con otra fuente | No se cargó `assets/fonts/atkinson.css`. Recarga con la caché vacía (Ctrl+Shift+R). |
+| Pantalla "Gira el dispositivo" | Estás en vertical en un móvil o tablet. Gira a horizontal. |
 
 ## Estructura relevante
 

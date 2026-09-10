@@ -1,6 +1,6 @@
 # Instrucciones — lanzar y probar Multiplicón
 
-Estado actual: **Fase 3** (ranking con servidor, deploy y personajes Pokémon). El arte de fondos, el teclado en pantalla, la división y el audio llegan en fases posteriores.
+Estado actual: **v1 completa** (fases 1 a 6 de `plan.md`). Multiplicación y división, tres gimnasios Pokémon con arte propio, teclado en pantalla, audio sintetizado con ajustes, ranking con servidor y manifest para instalar como app.
 
 ## Requisitos
 
@@ -15,6 +15,8 @@ Desde la raíz del proyecto:
 ```bash
 pnpm install
 ```
+
+Los sprites de líderes y la tipografía ya están versionados. Si hiciera falta regenerarlos: `pnpm fetch-trainers` y `node scripts/fetch-fonts.mjs`.
 
 ## Lanzar en desarrollo
 
@@ -32,38 +34,45 @@ Si solo lanzas `pnpm dev`, el juego funciona pero el ranking se guarda en el nav
 ## Flujo de pantallas
 
 ```
-Título ─┬─> Nombre ─> Entrenador ─> Nivel ─> Combate ─> Resultado ─┬─> Ranking
-        └─> Ranking                                                └─> otra partida / cambiar nivel
+Título ─┬─> Nombre ─> Entrenador ─> Operación y nivel ─> Combate ─> Resultado ─┬─> Ranking
+        ├─> Ranking                                        │                     └─> otra partida / cambiar nivel
+        └─> Ajustes                                        └─ Esc: pausa + Ajustes en overlay
 ```
 
 | Pantalla | Teclado | Ratón / táctil |
 |---|---|---|
-| Título | Enter juega · R ranking | Botones |
+| Título | Enter juega · R ranking · A ajustes · M silencio | Botones |
 | Nombre | Escribir, Enter. Máx. 12 caracteres, recuerda el último | Campo de texto y botón |
 | Entrenador | Flechas y Enter. Escape vuelve a Nombre | Clic en un líder |
-| Nivel | ← → y Enter, o 1 / 2 / 3. Escape vuelve a Entrenador | Clic en una tarjeta |
-| Combate | Dígitos, Backspace borra, Enter confirma | (teclado en pantalla en Fase 4) |
+| Operación y nivel | M / D o Tab cambia la operación · ← → y Enter, o 1 / 2 / 3 · Escape vuelve a Entrenador | Clic en operación y tarjeta |
+| Combate | Dígitos, Backspace, Enter · Esc pausa y abre Ajustes | Teclado numérico en pantalla |
 | Resultado | Enter otra vez · R ranking · Escape cambiar nivel | Botones |
-| Ranking | ← → cambia de nivel · Enter jugar · Escape menú | Pestañas y botones |
+| Ranking | ← → nivel · M / D operación · Enter jugar · Escape menú | Pestañas y botones |
+| Ajustes | Escape cierra · M silencio | Todo con clic |
+
+El botón de silencio está siempre en la esquina inferior derecha.
 
 ## Atajo para probar un nivel directo
 
-`?level=facil`, `?level=normal` o `?level=dificil` en la URL salta al combate con el último nombre y entrenador guardados.
+`?level=facil|normal|dificil` y opcionalmente `&op=dividir` en la URL saltan al combate con el último nombre y entrenador guardados. Ejemplo: `http://localhost:5173/?level=dificil&op=dividir`.
 
 ## Qué probar a mano
 
-1. **Entrenador.** Elige un líder; su sprite aparece a la izquierda en el combate. Al volver a jugar queda preseleccionado.
-2. **Pokémon.** Al entrar al combate aparece el nombre de un Pokémon aleatorio (en español) y, en uno o dos segundos, su ilustración. Cada oleada trae uno distinto sin espera, porque el siguiente se descarga por adelantado.
-3. **Sin red.** En DevTools bloquea `pokeapi.co` y `raw.githubusercontent.com` (o desconecta la red). El enemigo se muestra como rectángulo con "Pokémon #n" y no aparece ningún error.
-4. **Oleadas, fallo, timeout, pausa.** Igual que en la fase 2: 5 aciertos derrotan al primer Pokémon, el fallo no cambia la operación, el timeout quita un corazón y muestra el resultado, cambiar de pestaña congela el reloj.
-5. **Resultado.** Muestra aciertos, Pokémon derrotados con sus nombres, el estado del guardado ("Puesto #n en el ranking" o "guardado en este dispositivo") y las operaciones que costaron más.
-6. **Ranking.** Desde Resultado con R: la partida recién jugada aparece resaltada con su posición real aunque no esté en el top 10. Cambia de pestaña con las flechas. `data/scores.json` contiene la entrada.
-7. **Servidor caído.** Para `pnpm dev:server`, juega y pierde: el resultado dice "guardado en este dispositivo" y el ranking avisa que muestra datos locales. Vuelve a arrancar el servidor y recarga el título: la puntuación pendiente se envía sola (`localStorage` `multiplicon.pending` queda vacío).
-8. **Nombres.** Un nombre con una palabra malsonante llega al ranking con asteriscos.
+1. **Tipografía.** Todo el texto se ve en Atkinson Hyperlegible (0 y O, 1 y 7, 6 y 8 se distinguen). Si el primer frame sale con otra fuente, la carga de `assets/fonts/atkinson.css` falló.
+2. **Operación.** En la pantalla de nivel, elige Dividir: las tarjetas cambian a "2 cifras ÷ 1 cifra" y el tiempo se duplica. En el combate aparecen divisiones exactas (nunca con resto) y la cabecera dice "División". La elección se recuerda.
+3. **Gimnasios.** Cada nivel tiene fondo en tres capas y paleta propia (roca y planta, agua y eléctrico, psíquico y fantasma). La operación se ve igual de grande y legible en los tres. Al recibir un ataque, el fondo se sacude con leve parallax.
+4. **Teclado en pantalla.** Toca los dígitos y ✓ a la derecha del campo de respuesta. Las teclas se iluminan también cuando escribes con el teclado físico.
+5. **Corazones.** Son corazones SVG teñidos con el color del gimnasio; al perder uno se encoge y desaparece.
+6. **Audio.** No suena nada hasta el primer clic o tecla (política del navegador). Después: música de menú, música distinta en cada gimnasio, clic en cada tecla, sonido de acierto, golpe al recibir ataque, fanfarria al derrotar un Pokémon y descenso al perder. El fallo **no suena**. Con un solo corazón o menos de 2 s, entra una capa de tensión (pad grave y charles) con fundido.
+7. **Ajustes.** Desde el título (A) o en pleno combate (Escape, que pausa el reloj). Cambia el sonido de acierto, el texto de fallo (o escribe uno propio de hasta 8 caracteres), la música de cada mundo y los volúmenes; cada uno tiene "Probar". Los cambios se aplican al instante y se guardan. Escribe un texto propio, vuelve al combate y falla: se ve tu texto.
+8. **Preferencia inválida.** En consola: `localStorage.setItem('multiplicon.feedback', '{"correctId":"trompeta"}')` y recarga. El juego arranca con la campana por defecto, sin error.
+9. **Silencio y foco.** M o el botón de la esquina silencian todo. Al cambiar de pestaña, se pausan el reloj y el audio.
+10. **Instalación como app.** En Chrome de escritorio o Android aparece "Instalar Multiplicón" (manifest, icono y modo pantalla completa en horizontal). En vertical en un móvil se muestra "Gira el dispositivo".
+11. **Pokémon, ranking, sin red y servidor caído.** Igual que en la fase 3: Pokémon aleatorio con ilustración, rectángulo sin red, ranking con seis tablas (operación × nivel), respaldo local y reenvío de pendientes.
 
 ## Pruebas automáticas
 
-Cliente (generador, estado del combate, resumen de fallos, ranking local, cliente de PokéAPI) y servidor (orden, escritura atómica, concurrencia, validación, rutas). No necesitan navegador ni red.
+Cliente (generadores de multiplicación y división, estado del combate, resumen de fallos, ranking local, PokéAPI, validación de ajustes) y servidor (orden, escritura atómica, concurrencia, validación, rutas). No necesitan navegador ni red.
 
 ```bash
 pnpm test          # una pasada
@@ -77,7 +86,7 @@ pnpm build         # tsc + vite build → dist/   y   tsc servidor → dist-serv
 pnpm start         # sirve dist/ y la API en http://localhost:8787
 ```
 
-Comprueba `http://localhost:8787/api/health` → `{"ok":true}`.
+Comprueba `http://localhost:8787/api/health` → `{"ok":true}` y `http://localhost:8787/manifest.json`.
 
 Variables de entorno del servidor: `PORT` (8787), `DATA_DIR` (carpeta de `scores.json`, por defecto `./data`), `DIST_DIR` (build del cliente, por defecto `./dist`).
 
@@ -86,34 +95,40 @@ Variables de entorno del servidor: `PORT` (8787), `DATA_DIR` (carpeta de `scores
 1. Crear una aplicación desde este repositorio con **Dockerfile** como método de build.
 2. **Montar un volumen en `/app/data`.** Sin él, cada redeploy borra el ranking completo.
 3. Puerto expuesto: 8787. Variables opcionales: `PORT`, `DATA_DIR`.
-4. Tras el primer deploy, abrir `/api/health` y jugar una partida; confirmar que `scores.json` aparece en el volumen y sobrevive a un redeploy.
+4. Dominio y HTTPS: en Dokploy, añadir el dominio en la aplicación y activar el certificado (Let's Encrypt). El manifest exige HTTPS para que el navegador ofrezca instalar la app.
+5. Tras el primer deploy, abrir `/api/health` y jugar una partida; confirmar que `scores.json` aparece en el volumen y sobrevive a un redeploy.
 
 Docker no está instalado en la máquina de desarrollo: la imagen se construye en el VPS.
 
-## Datos de PokéAPI y créditos
+## Datos, arte y créditos
 
-Los nombres de los Pokémon vienen de PokéAPI y se cachean en `localStorage` (`multiplicon.pokemon.<id>`). Las ilustraciones se cargan desde el repositorio público de sprites de PokéAPI. Los sprites de líderes se descargaron una vez con `pnpm fetch-trainers` y están en `public/assets/trainers/`. Licencias y atribuciones en `CREDITS.md`.
+- Nombres de Pokémon desde PokéAPI, cacheados en `localStorage` (`multiplicon.pokemon.<id>`); ilustraciones desde el repositorio de sprites de PokéAPI.
+- Sprites de líderes en `public/assets/trainers/` (descargados una vez).
+- Fondos, corazones e iconos son SVG escritos a mano en `public/assets/gyms/`, `public/assets/shared/` y `public/`.
+- Música y efectos sintetizados con Web Audio: no hay archivos de audio.
+- Licencias y atribuciones en `CREDITS.md`.
 
 ## Inspeccionar el juego desde la consola del navegador
 
-Solo en modo desarrollo, la instancia de Phaser queda en `window.__multiplicon`.
+Solo en modo desarrollo:
 
 ```js
 const game = window.__multiplicon;
 game.scene.getScenes(true).map((s) => s.scene.key);   // escena activa
 
 const sc = game.scene.getScene('Battle');              // durante el combate
-sc.state.problem.text     // "347 × 26"
-sc.state.problem.answer   // 9022
-sc.state.hearts           // corazones restantes
-sc.state.wave             // oleada actual
-sc.state.monsterHp        // vida del Pokémon actual
-sc.monster.pokemonName    // nombre del Pokémon en pantalla
-sc.defeatedNames          // Pokémon derrotados en esta partida
+sc.state.problem.text     // "576 ÷ 32"
+sc.state.problem.answer   // 18
+sc.state.operation        // 'multiplicar' | 'dividir'
+sc.state.timeLimit        // segundos por operación (el doble en división)
+sc.monster.pokemonName    // Pokémon en pantalla
+sc.missLabel.text         // texto de fallo en uso
 
-localStorage.getItem('multiplicon.name')     // último nombre
-localStorage.getItem('multiplicon.trainer')  // último entrenador
-localStorage.getItem('multiplicon.pending')  // puntuaciones pendientes de enviar
+window.__audio.settings   // preferencias de audio en memoria
+window.__audio.isUnlocked // true tras el primer gesto
+
+localStorage.getItem('multiplicon.feedback')   // preferencias guardadas
+localStorage.getItem('multiplicon.operation')  // última operación
 ```
 
 ## Detener los servidores
@@ -128,31 +143,34 @@ $c = Get-NetTCPConnection -LocalPort 8787 -State Listen; Stop-Process -Id $c.Own
 ## Estructura relevante
 
 ```
-server/
-├── index.ts                   arranque: puerto, rutas de datos y build
-├── app.ts                     rutas /api/health, /api/leaderboard, /api/scores y estáticos
-├── scoreStore.ts              archivo JSON con escritura atómica y cola
-├── validation.ts / badwords.ts
-└── *.test.ts
+server/                        API Hono: app.ts, scoreStore.ts, validation.ts, badwords.ts, *.test.ts
+scripts/                       fetch-trainers.mjs, fetch-fonts.mjs
+public/
+├── manifest.json, icon.svg    instalación como app
+└── assets/
+    ├── fonts/                 Atkinson Hyperlegible (OFL)
+    ├── gyms/{facil,normal,dificil}/bg-*.svg
+    ├── shared/heart-*.svg
+    └── trainers/*.png
 src/
-├── main.ts                    Phaser: 1280×720, Scale.FIT, contenedor DOM, crossOrigin
-├── types.ts
+├── main.ts                    espera la fuente, instala el audio, arranca Phaser
 ├── config/
-│   ├── difficulties.ts        niveles, curva de tiempo, vida del monstruo
-│   └── trainers.ts            líderes de gimnasio disponibles
+│   ├── difficulties.ts        niveles, cifras de × y ÷, curva de tiempo, vida del monstruo
+│   ├── themes.ts              paletas y capas por gimnasio
+│   ├── feedback.ts            catálogo de música, sonidos de acierto y textos de fallo
+│   └── trainers.ts
 ├── systems/
-│   ├── ProblemGenerator.ts / BattleState.ts / Preferences.ts
-│   ├── pokemon/PokeApi.ts     nombre e ilustración con caché y fallback
-│   └── scores/                ScoreRepository, Http, Local, ScoreService
+│   ├── ProblemGenerator.ts    multiplicación y división exacta
+│   ├── BattleState.ts         bucle de combate (doble tiempo en división)
+│   ├── AudioManager.ts        síntesis, capa de tensión, ducking, autoplay, foco
+│   ├── FeedbackSettings.ts    preferencias validadas contra el catálogo
+│   ├── Preferences.ts         nombre, entrenador y operación recordados
+│   ├── pokemon/PokeApi.ts
+│   └── scores/
 ├── ui/
-│   ├── HeroView.ts            sprite del entrenador
-│   ├── MonsterView.ts         ilustración del Pokémon, nombre y barra de vida
-│   └── Button.ts / keys.ts / style.ts
+│   ├── NumPad.ts · MissLabel.ts · HeartBar.ts · MuteButton.ts
+│   ├── HeroView.ts · MonsterView.ts
+│   └── Button.ts · keys.ts · style.ts
 └── scenes/
-    Preload · Title · Name · TrainerSelect · LevelSelect · Battle · Result · Leaderboard
-public/assets/trainers/        sprites descargados (scripts/fetch-trainers.mjs)
-data/scores.json               ranking (no se versiona)
-Dockerfile                     imagen multi-etapa para Dokploy
+    Preload · Title · Name · TrainerSelect · LevelSelect · Battle · Result · Leaderboard · Settings
 ```
-
-Las fases siguientes están en `plan.md`, sección 12. La próxima es la fase 4: arte por gimnasio, teclado en pantalla y la elección entre multiplicar y dividir.

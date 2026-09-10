@@ -4,8 +4,26 @@ import { BattleState, summarizeFailures } from './BattleState';
 import { seededRng } from './testRng';
 import type { DifficultyId, HistoryEntry, Problem } from '../types';
 
-const newState = (id: DifficultyId = 'facil', seed = 1) => new BattleState(DIFFICULTIES[id], seededRng(seed));
+const newState = (id: DifficultyId = 'facil', seed = 1) => new BattleState(DIFFICULTIES[id], 'multiplicar', seededRng(seed));
 const timeout = (s: BattleState) => s.tick(s.timeLimit + 1);
+
+describe('BattleState: división', () => {
+  it('genera divisiones exactas y da el doble de tiempo en cada oleada', () => {
+    const s = new BattleState(DIFFICULTIES.normal, 'dividir', seededRng(3));
+    expect(s.problem.text).toContain('÷');
+    expect(s.problem.operands[0]! % s.problem.operands[1]!).toBe(0);
+    expect(s.timeLimit).toBe(timeLimitForWave(1, DIFFICULTIES.normal) * 2);
+    for (let i = 0; i < monsterHpForWave(1); i++) s.submit(s.problem.answer);
+    expect(s.wave).toBe(2);
+    expect(s.problem.text).toContain('÷');
+    expect(s.timeLimit).toBe(timeLimitForWave(2, DIFFICULTIES.normal) * 2);
+  });
+  it('por defecto multiplica', () => {
+    const s = new BattleState(DIFFICULTIES.facil, undefined, seededRng(1));
+    expect(s.problem.text).toContain('×');
+    expect(s.operation).toBe('multiplicar');
+  });
+});
 
 describe('BattleState: arranque', () => {
   it('arranca con los corazones del nivel, 0 aciertos, oleada 1 y el tiempo de la oleada 1', () => {

@@ -1,4 +1,4 @@
-/** Estilo provisional compartido por todas las escenas. Los temas reales entran en Fase 4. */
+/** Estilo compartido por los menús. El combate usa la paleta del gimnasio (config/themes.ts). */
 export const COLORS = {
   bg: 0x1e1e2e,
   text: '#f2e9d8',
@@ -21,12 +21,21 @@ export const COLORS = {
   danger: '#ff5470',
 };
 
-export const NUMBER_FONT = 'Consolas, "Courier New", monospace';
-export const UI_FONT = '"Segoe UI", Arial, sans-serif';
+/**
+ * Atkinson Hyperlegible para todo: distingue 0/O, 1/7 y 6/8 mejor que cualquier fuente
+ * decorativa, y el número es lo único que de verdad tiene que leerse rápido.
+ */
+export const FONT_FAMILY = '"Atkinson Hyperlegible", "Segoe UI", Arial, sans-serif';
+export const NUMBER_FONT = FONT_FAMILY;
+export const UI_FONT = FONT_FAMILY;
 
 export const W = 1280;
 export const H = 720;
 
 export function prefersReducedMotion(): boolean {
   return window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false;
+}
+
+export function hex(n: number): string {
+  return `#${n.toString(16).padStart(6, '0')}`;
 }

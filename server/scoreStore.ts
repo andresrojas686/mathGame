@@ -81,6 +81,17 @@ export class ScoreStore {
     await mkdir(path.dirname(this.filePath), { recursive: true });
     const tmp = `${this.filePath}.${process.pid}.${Date.now()}.tmp`;
     await writeFile(tmp, JSON.stringify(data, null, 2), 'utf8');
-    await rename(tmp, this.filePath);
+    // En Windows el rename sobre un archivo que el antivirus acaba de abrir falla con EPERM
+    // de forma transitoria; unos reintentos cortos lo resuelven sin perder la atomicidad.
+    for (let attempt = 0; ; attempt++) {
+      try {
+        await rename(tmp, this.filePath);
+        return;
+      } catch (err) {
+        const code = (err as NodeJS.ErrnoException).code;
+        if ((code !== 'EPERM' && code !== 'EBUSY') || attempt >= 5) throw err;
+        await new Promise((r) => setTimeout(r, 25 * (attempt + 1)));
+      }
+    }
   }
 }

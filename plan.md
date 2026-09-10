@@ -319,6 +319,8 @@ Pokémon es marca de Nintendo, Creatures y GAME FREAK. El uso aquí es educativo
 
 ## 9. Audio
 
+> **Implementación (fase 5):** toda la música y los efectos se **sintetizan con Web Audio** en tiempo real (`src/systems/AudioManager.ts`). No hay archivos `.ogg`/`.m4a` ni pistas de terceros: los loops son generativos y no tienen corte, la capa de tensión es un bus con fundido, y el catálogo de `config/feedback.ts` apunta a presets del sintetizador en vez de a nombres de archivo. Las secciones "Formatos", "Precarga selectiva", "Estructura de archivos" y "Origen de las pistas" de abajo describen la alternativa con archivos y quedan como referencia por si algún día se quiere música grabada.
+
 ### Música de fondo por dificultad
 
 Cada nivel tiene su propia pista, en el mismo registro que su tema visual. La música no es decoración: es lo que le dice al niño en qué mundo está antes de leer una sola palabra.
@@ -683,22 +685,18 @@ Proyecto Vite + Phaser + TS. `ProblemGenerator` con sus tres configuraciones y p
 Vidas del monstruo, oleadas sin límite, reducción de tiempo con su piso. Pantallas de título, nombre, selección de nivel y resultado. Historial de operaciones falladas.
 
 ### Fase 3 — Ranking, deploy y personajes Pokémon ✔
-Servidor Hono con las rutas y escritura atómica. `ScoreRepository` con sus dos implementaciones y reintento de pendientes. Pantalla de ranking con pestañas por nivel y resaltado de la partida actual. Integración con PokéAPI: Pokémon aleatorio por oleada con nombre en español e ilustración precargada; galería de líderes de gimnasio como héroe. Dockerfile y primer deploy en Dokploy con el volumen.
+Servidor Hono con las rutas y escritura atómica. `ScoreRepository` con sus dos implementaciones y reintento de pendientes. Pantalla de ranking con pestañas por nivel y resaltado de la partida actual. Integración con PokéAPI: Pokémon aleatorio por oleada con nombre en español e ilustración precargada; galería de líderes de gimnasio como héroe. Dockerfile para Dokploy.
 
-*Conviene desplegar aquí y no al final: los problemas de volumen y rutas estáticas aparecen en el primer deploy, y es mejor encontrarlos cuando el proyecto todavía es simple.*
+### Fase 4 — Operación, arte de gimnasios y teclado en pantalla ✔
+Elección de operación en la pantalla de nivel: multiplicar o dividir, con división exacta por cifras de dividendo y divisor y el doble de tiempo (sección 4). Fondos SVG en tres capas, paleta y parallax por gimnasio (`config/themes.ts`); corazones SVG teñidos. Atkinson Hyperlegible autoalojada y esperada antes del primer frame. Teclado numérico en pantalla, `MissLabel`, `HeartBar` y aviso de girar el dispositivo en vertical.
 
-### Fase 4 — Operación, arte de gimnasios y teclado en pantalla
-- **Elección de operación** en la pantalla de nivel: multiplicar o dividir. División exacta `(a·b) ÷ b` con el doble de tiempo por operación en todos los niveles (sección 4). `Problem.text` ya lo permite sin tocar `BattleScene`. El ranking usa las tablas `dividir:*` que ya existen.
-- Producción de los SVG por gimnasio: fondos en tres capas, marcos de interfaz, corazones. Sistema de temas (`config/themes.ts`) aplicado a toda la interfaz. Tipografía Atkinson Hyperlegible con precarga.
-- Teclado numérico en pantalla para tablet. Sacudidas, destellos, transiciones y `MissLabel` como componente.
+### Fase 5 — Audio y pulido ✔
+`AudioManager` con síntesis en Web Audio en lugar de archivos: loops generativos por gimnasio y menú, capa de tensión, ducking, arranque en el primer gesto y silencio al perder el foco. Catálogo en `config/feedback.ts` y `SettingsScene` (desde el título o con Escape en combate, en overlay con el reloj en pausa) con prueba de cada sonido, del texto de fallo y de la música; preferencias validadas contra el catálogo. `CREDITS.md` con tipografía, PokéAPI y sprites.
 
-### Fase 5 — Audio y pulido
-`AudioManager` con precarga selectiva, capa de tensión y ducking. Catálogo en `config/feedback.ts` y `SettingsScene` con prueba de cada sonido y del texto de fallo. Selección y licenciamiento de las pistas y efectos, normalización de `gain`, y `CREDITS.md`. Verificación del arranque tras el primer clic en los cuatro navegadores.
+*Pendiente de validación con niños reales:* si 15/12/9 segundos son muchos o pocos, y si los loops aguantan una sesión larga. Es lo único que este plan no puede decidir por sí mismo.
 
-Pruebas en tablet. Ajuste de tiempos y curva de dificultad con niños reales, y sesiones largas para confirmar que los loops aguantan veinte minutos sin cansar.
-
-### Fase 6 — Publicación
-Optimización de assets, `manifest.json` para instalación como app, dominio y HTTPS en Dokploy.
+### Fase 6 — Publicación ✔
+`manifest.json` con iconos SVG para instalar como app en horizontal, `theme-color`, tipografía y assets locales sin dependencias externas salvo PokéAPI. Dominio y HTTPS se configuran en Dokploy (ver `instrucciones.md`); el manifest exige HTTPS para ofrecer la instalación.
 
 ---
 

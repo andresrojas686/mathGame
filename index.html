@@ -2,17 +2,33 @@
 <html lang="es">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <title>Multiplicón</title>
-    <link rel="icon" href="data:," />
+    <meta name="description" content="Resuelve multiplicaciones y divisiones antes de que el Pokémon ataque." />
+    <meta name="theme-color" content="#1e1e2e" />
+    <link rel="icon" href="/icon.svg" type="image/svg+xml" />
+    <link rel="apple-touch-icon" href="/icon.svg" />
+    <link rel="manifest" href="/manifest.json" />
+    <link rel="stylesheet" href="/assets/fonts/atkinson.css" />
     <style>
-      html, body { margin: 0; padding: 0; background: #111; height: 100%; overflow: hidden; }
+      html, body { margin: 0; padding: 0; background: #1e1e2e; height: 100%; overflow: hidden; }
       #game { width: 100%; height: 100%; }
       canvas { display: block; margin: 0 auto; }
+      /* En vertical (tablet en retrato) se pide girar el dispositivo en vez de intentar otro layout. */
+      #rotate {
+        display: none; position: fixed; inset: 0; z-index: 1000; background: #1e1e2e; color: #f2e9d8;
+        font: 24px "Atkinson Hyperlegible", "Segoe UI", Arial, sans-serif; text-align: center;
+        align-items: center; justify-content: center; padding: 32px;
+      }
+      #rotate span { display: block; font-size: 72px; margin-bottom: 16px; }
+      @media (orientation: portrait) and (max-width: 900px) {
+        #rotate { display: flex; }
+      }
     </style>
   </head>
   <body>
     <div id="game"></div>
+    <div id="rotate" role="status"><div><span>📱↻</span>Gira el dispositivo para jugar</div></div>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>

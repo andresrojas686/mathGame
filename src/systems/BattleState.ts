@@ -1,6 +1,6 @@
-import type { DifficultyConfig, FailureSummary, HistoryEntry, Problem, Rng } from '../types';
+import type { DifficultyConfig, FailureSummary, HistoryEntry, Operation, Problem, Rng } from '../types';
 import { monsterHpForWave, timeLimitForWave } from '../config/difficulties';
-import { generateProblem } from './ProblemGenerator';
+import { generateProblemFor } from './ProblemGenerator';
 
 export type SubmitResult = 'correct' | 'defeated' | 'miss' | 'ignored';
 
@@ -8,6 +8,9 @@ export type TickResult =
   | { type: 'running' }
   | { type: 'hit'; lost: Problem }
   | { type: 'gameover'; lost: Problem };
+
+/** En división el tiempo por operación es el doble, incluido el piso (plan.md §4). */
+export const DIVISION_TIME_FACTOR = 2;
 
 /**
  * Máquina de estado del bucle de combate (plan.md §3). No importa nada de Phaser.
@@ -20,6 +23,7 @@ export type TickResult =
  */
 export class BattleState {
   readonly cfg: DifficultyConfig;
+  readonly operation: Operation;
   readonly history: HistoryEntry[] = [];
 
   hearts: number;
@@ -37,13 +41,14 @@ export class BattleState {
 
   private readonly rng: Rng;
 
-  constructor(cfg: DifficultyConfig, rng: Rng = Math.random) {
+  constructor(cfg: DifficultyConfig, operation: Operation = 'multiplicar', rng: Rng = Math.random) {
     this.cfg = cfg;
+    this.operation = operation;
     this.rng = rng;
     this.hearts = cfg.hearts;
     this.monsterMaxHp = monsterHpForWave(this.wave);
     this.monsterHp = this.monsterMaxHp;
-    this.problem = generateProblem(cfg, undefined, rng);
+    this.problem = generateProblemFor(operation, cfg, undefined, rng);
     this.timeLimit = this.nextTimeLimit();
     this.timeLeft = this.timeLimit;
   }
@@ -54,7 +59,8 @@ export class BattleState {
   }
 
   nextTimeLimit(): number {
-    return timeLimitForWave(this.wave, this.cfg);
+    const base = timeLimitForWave(this.wave, this.cfg);
+    return this.operation === 'dividir' ? base * DIVISION_TIME_FACTOR : base;
   }
 
   submit(answer: number): SubmitResult {
@@ -97,7 +103,7 @@ export class BattleState {
   }
 
   private advance(): void {
-    this.problem = generateProblem(this.cfg, this.problem, this.rng);
+    this.problem = generateProblemFor(this.operation, this.cfg, this.problem, this.rng);
     this.timeLimit = this.nextTimeLimit();
     this.timeLeft = this.timeLimit;
   }

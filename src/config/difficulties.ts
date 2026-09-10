@@ -59,7 +59,7 @@ export function monsterHpForWave(wave: number): number {
 
 /** Datos de presentación de cada nivel para la pantalla de selección. Los temas visuales llegan en Fase 4. */
 export const DIFFICULTY_LABELS: Record<DifficultyId, { title: string; theme: string }> = {
-  facil: { title: 'Fácil', theme: 'Medieval' },
-  normal: { title: 'Normal', theme: 'Zombies y vampiros' },
-  dificil: { title: 'Difícil', theme: 'Alienígenas' },
+  facil: { title: 'Fácil', theme: 'Gimnasio de roca y planta' },
+  normal: { title: 'Normal', theme: 'Gimnasio de agua y eléctrico' },
+  dificil: { title: 'Difícil', theme: 'Gimnasio psíquico y fantasma' },
 };

@@ -1,19 +1,28 @@
 import Phaser from 'phaser';
 import { DIFFICULTIES, DIFFICULTY_LABELS, isDifficultyId } from '../config/difficulties';
+import { THEMES, type Theme } from '../config/themes';
 import { DEFAULT_TRAINER_ID } from '../config/trainers';
+import { audio } from '../systems/AudioManager';
 import { BattleState } from '../systems/BattleState';
+import { missTextFor } from '../systems/FeedbackSettings';
 import { fetchPokemonInfo, randomPokemonId, type PokemonInfo } from '../systems/pokemon/PokeApi';
 import type { BattleParams, DifficultyId, Operation, Problem, ResultParams } from '../types';
+import { HeartBar } from '../ui/HeartBar';
 import { HeroView } from '../ui/HeroView';
 import { bindWindowKeys, isDigitKey } from '../ui/keys';
+import { MissLabel } from '../ui/MissLabel';
 import { MonsterView } from '../ui/MonsterView';
-import { COLORS, H, NUMBER_FONT, prefersReducedMotion, UI_FONT, W } from '../ui/style';
+import { addMuteButton } from '../ui/MuteButton';
+import { NumPad, type NumPadKey } from '../ui/NumPad';
+import { H, NUMBER_FONT, prefersReducedMotion, UI_FONT, W } from '../ui/style';
+import { SETTINGS_CLOSED_EVENT } from './SettingsScene';
 
 /** Máximo de cifras de un resultado: 99999 × 999 = 99 899 001 → 8 cifras. Una de margen. */
 const MAX_ANSWER_DIGITS = 9;
 const REVEAL_MS = 500;
 const MAX_TICK_MS = 100;
-const GAME_OVER_DELAY_MS = 1400;
+const GAME_OVER_DELAY_MS = 1600;
+const LOW_TIME_S = 2;
 
 export class BattleScene extends Phaser.Scene {
   private state!: BattleState;
@@ -21,18 +30,20 @@ export class BattleScene extends Phaser.Scene {
   private operation: Operation = 'multiplicar';
   private playerName = '';
   private trainerId = DEFAULT_TRAINER_ID;
+  private theme!: Theme;
   private reducedMotion = false;
 
   private input$ = '';
   private paused = false;
+  private settingsOpen = false;
   private revealMsLeft = 0;
 
-  /** Pokémon en pantalla y el siguiente, ya pedido para que el cambio de oleada sea inmediato. */
   private nextPokemon: Promise<PokemonInfo> | null = null;
   private defeatedNames: string[] = [];
   private usedIds = new Set<number>();
 
-  private hearts: Phaser.GameObjects.Rectangle[] = [];
+  private layers: Phaser.GameObjects.Image[] = [];
+  private heartBar!: HeartBar;
   private correctText!: Phaser.GameObjects.Text;
   private waveText!: Phaser.GameObjects.Text;
   private problemText!: Phaser.GameObjects.Text;
@@ -40,8 +51,9 @@ export class BattleScene extends Phaser.Scene {
   private timerWidth = 600;
   private answerText!: Phaser.GameObjects.Text;
   private answerGroup!: Phaser.GameObjects.Container;
-  private missLabel!: Phaser.GameObjects.Text;
+  private missLabel!: MissLabel;
   private pauseLabel!: Phaser.GameObjects.Text;
+  private numpad!: NumPad;
   private hero!: HeroView;
   private monster!: MonsterView;
 
@@ -55,27 +67,37 @@ export class BattleScene extends Phaser.Scene {
     this.operation = data.operation ?? 'multiplicar';
     this.playerName = data.name ?? 'Jugador';
     this.trainerId = data.trainer ?? DEFAULT_TRAINER_ID;
-    this.state = new BattleState(DIFFICULTIES[this.difficulty]);
+    this.theme = THEMES[this.difficulty];
+    this.state = new BattleState(DIFFICULTIES[this.difficulty], this.operation);
     this.input$ = '';
     this.paused = false;
+    this.settingsOpen = false;
     this.revealMsLeft = 0;
-    this.hearts = [];
     this.nextPokemon = null;
     this.defeatedNames = [];
     this.usedIds = new Set();
+    this.layers = [];
     this.reducedMotion = prefersReducedMotion();
   }
 
   create(): void {
-    this.cameras.main.setBackgroundColor(COLORS.bg);
+    const p = this.theme.palette;
+    this.cameras.main.setBackgroundColor(p.bg);
+    this.cameras.main.fadeIn(400);
+    this.buildBackground();
     this.buildHud();
     this.buildStage();
     this.buildProblem();
     this.buildAnswer();
+    addMuteButton(this, p.text);
     bindWindowKeys(this, (e) => this.onKey(e));
     this.bindFocus();
     this.renderAll();
     void this.spawnFirstPokemon();
+
+    audio.setDetune(this.theme.sfxDetune);
+    audio.playMusic(this.difficulty);
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => audio.setTension(false));
   }
 
   override update(time: number, delta: number): void {
@@ -90,6 +112,7 @@ export class BattleScene extends Phaser.Scene {
     const dt = Math.min(delta, MAX_TICK_MS) / 1000;
     const result = this.state.tick(dt);
     this.renderTimer(time);
+    audio.setTension(this.state.hearts === 1 || this.state.timeLeft < LOW_TIME_S);
 
     if (result.type === 'hit') this.onMonsterAttack(result.lost);
     else if (result.type === 'gameover') this.onGameOver(result.lost);
@@ -99,7 +122,6 @@ export class BattleScene extends Phaser.Scene {
 
   private requestPokemon(): Promise<PokemonInfo> {
     let id = randomPokemonId();
-    // Evita repetir dentro de la misma partida mientras haya de sobra.
     for (let i = 0; i < 10 && this.usedIds.has(id); i++) id = randomPokemonId();
     this.usedIds.add(id);
     return fetchPokemonInfo(id);
@@ -121,20 +143,25 @@ export class BattleScene extends Phaser.Scene {
 
   // ---------- construcción ----------
 
+  private buildBackground(): void {
+    this.theme.layers.forEach((key, i) => {
+      if (!this.textures.exists(key)) return;
+      this.layers.push(this.add.image(W / 2, H / 2, key).setDepth(-10 + i));
+    });
+  }
+
   private buildHud(): void {
+    const p = this.theme.palette;
     const cfg = DIFFICULTIES[this.difficulty];
-    const size = cfg.hearts > 6 ? 26 : 36;
-    const step = size + 10;
-    for (let i = 0; i < cfg.hearts; i++) {
-      this.hearts.push(this.add.rectangle(40 + size / 2 + i * step, 48, size, size, COLORS.heartOn));
-    }
-    this.correctText = this.add.text(W - 40, 40, '', { fontFamily: UI_FONT, fontSize: '32px', color: COLORS.text }).setOrigin(1, 0.5);
-    this.waveText = this.add.text(W - 40, 74, '', { fontFamily: UI_FONT, fontSize: '20px', color: COLORS.muted }).setOrigin(1, 0.5);
+    this.heartBar = new HeartBar(this, 56, 48, cfg.hearts, p.accent);
+    this.correctText = this.add.text(W - 40, 40, '', { fontFamily: UI_FONT, fontSize: '32px', color: p.text }).setOrigin(1, 0.5);
+    this.waveText = this.add.text(W - 40, 74, '', { fontFamily: UI_FONT, fontSize: '20px', color: p.muted }).setOrigin(1, 0.5);
+    const opLabel = this.operation === 'dividir' ? 'División' : 'Multiplicación';
     this.add
-      .text(W / 2, 48, `${this.playerName} · ${DIFFICULTY_LABELS[this.difficulty].title}`, { fontFamily: UI_FONT, fontSize: '20px', color: COLORS.muted })
+      .text(W / 2, 48, `${this.playerName} · ${DIFFICULTY_LABELS[this.difficulty].title} · ${opLabel}`, { fontFamily: UI_FONT, fontSize: '20px', color: p.muted })
       .setOrigin(0.5);
     this.pauseLabel = this.add
-      .text(W / 2, H / 2, 'PAUSA', { fontFamily: UI_FONT, fontSize: '64px', color: COLORS.text })
+      .text(W / 2, H / 2, 'PAUSA', { fontFamily: UI_FONT, fontSize: '64px', color: p.text })
       .setOrigin(0.5)
       .setDepth(50)
       .setVisible(false);
@@ -143,46 +170,51 @@ export class BattleScene extends Phaser.Scene {
   private buildStage(): void {
     this.hero = new HeroView(this, 200, 330, this.trainerId, this.reducedMotion);
     this.monster = new MonsterView(this, 1080, 340, this.reducedMotion);
-    if (!this.reducedMotion) {
-      this.tweens.add({ targets: this.hero, y: '+=8', duration: 900, yoyo: true, repeat: -1, ease: 'Sine.inOut' });
-    }
+    if (!this.reducedMotion) this.tweens.add({ targets: this.hero, y: '+=8', duration: 900, yoyo: true, repeat: -1, ease: 'Sine.inOut' });
   }
 
   private buildProblem(): void {
-    this.problemText = this.add.text(W / 2, 290, '', { fontFamily: NUMBER_FONT, fontSize: '96px', color: COLORS.text }).setOrigin(0.5);
-    const y = 370;
-    this.add.rectangle(W / 2, y, this.timerWidth, 24, COLORS.timerTrack);
-    this.timerFill = this.add.rectangle(W / 2 - this.timerWidth / 2, y, this.timerWidth, 24, COLORS.timer).setOrigin(0, 0.5);
+    const p = this.theme.palette;
+    // La operación nunca se disfraza: misma tipografía, tamaño y contraste en los tres gimnasios.
+    this.add.rectangle(W / 2, 290, 620, 130, p.bg, 0.55).setStrokeStyle(2, p.secondary, 0.6);
+    this.problemText = this.add.text(W / 2, 290, '', { fontFamily: NUMBER_FONT, fontSize: '96px', color: p.text }).setOrigin(0.5);
+    const y = 372;
+    this.add.rectangle(W / 2, y, this.timerWidth, 22, p.bg, 0.8).setStrokeStyle(1, p.secondary, 0.5);
+    this.timerFill = this.add.rectangle(W / 2 - this.timerWidth / 2, y, this.timerWidth, 22, p.secondary).setOrigin(0, 0.5);
   }
 
   private buildAnswer(): void {
-    const box = this.add.rectangle(0, 0, 420, 84, COLORS.field).setStrokeStyle(3, COLORS.fieldBorder);
-    this.answerText = this.add.text(0, 0, '', { fontFamily: NUMBER_FONT, fontSize: '56px', color: COLORS.text }).setOrigin(0.5);
-    this.answerGroup = this.add.container(W / 2, 500, [box, this.answerText]);
-
-    this.missLabel = this.add
-      .text(W / 2, 440, 'MISS', { fontFamily: UI_FONT, fontSize: '40px', fontStyle: 'bold', color: COLORS.miss })
-      .setOrigin(0.5)
-      .setAlpha(0);
-
-    this.add
-      .text(W / 2, 580, 'dígitos · Backspace borra · Enter confirma', { fontFamily: UI_FONT, fontSize: '18px', color: COLORS.muted })
-      .setOrigin(0.5);
+    const p = this.theme.palette;
+    const box = this.add.rectangle(0, 0, 340, 80, p.bg, 0.85).setStrokeStyle(3, p.accent);
+    this.answerText = this.add.text(0, 0, '', { fontFamily: NUMBER_FONT, fontSize: '54px', color: p.text }).setOrigin(0.5);
+    this.answerGroup = this.add.container(500, 545, [box, this.answerText]);
+    this.missLabel = new MissLabel(this, 500, 480, missTextFor(audio.settings), `#${p.accent.toString(16).padStart(6, '0')}`, this.reducedMotion);
+    this.numpad = new NumPad(this, 846, 555, p, (key) => this.onPadKey(key));
+    this.add.text(500, 600, 'Enter confirma · Esc pausa y ajustes', { fontFamily: UI_FONT, fontSize: '16px', color: p.muted }).setOrigin(0.5);
   }
 
   private bindFocus(): void {
     const ev = this.game.events;
     const pause = () => this.setPaused(true);
-    const resume = () => this.setPaused(false);
+    const resume = () => {
+      if (!this.settingsOpen) this.setPaused(false);
+    };
     ev.on(Phaser.Core.Events.BLUR, pause);
     ev.on(Phaser.Core.Events.HIDDEN, pause);
     ev.on(Phaser.Core.Events.FOCUS, resume);
     ev.on(Phaser.Core.Events.VISIBLE, resume);
+    const onSettingsClosed = () => {
+      this.settingsOpen = false;
+      this.missLabel.setText(missTextFor(audio.settings));
+      this.setPaused(false);
+    };
+    ev.on(SETTINGS_CLOSED_EVENT, onSettingsClosed);
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       ev.off(Phaser.Core.Events.BLUR, pause);
       ev.off(Phaser.Core.Events.HIDDEN, pause);
       ev.off(Phaser.Core.Events.FOCUS, resume);
       ev.off(Phaser.Core.Events.VISIBLE, resume);
+      ev.off(SETTINGS_CLOSED_EVENT, onSettingsClosed);
     });
   }
 
@@ -190,24 +222,45 @@ export class BattleScene extends Phaser.Scene {
 
   private onKey(event: KeyboardEvent): void {
     if (event.ctrlKey || event.metaKey || event.altKey) return;
+    if (event.key === 'Escape') {
+      if (!this.settingsOpen && !this.state.over && !event.repeat) this.openSettings();
+      return;
+    }
     const digit = isDigitKey(event);
     if (!digit && event.key !== 'Backspace' && event.key !== 'Enter') return;
     event.preventDefault();
     if (this.state.over || this.paused || this.revealMsLeft > 0) return;
 
     if (digit) {
-      if (this.input$.length < MAX_ANSWER_DIGITS) {
-        this.input$ += event.key;
-        this.renderAnswer();
-      }
-      return;
+      this.numpad.flash(event.key as NumPadKey, this.theme.palette);
+      this.typeDigit(event.key);
+    } else if (event.key === 'Backspace') {
+      this.numpad.flash('back', this.theme.palette);
+      this.backspace();
+    } else if (!event.repeat) {
+      this.numpad.flash('ok', this.theme.palette);
+      this.confirm();
     }
-    if (event.key === 'Backspace') {
-      this.input$ = this.input$.slice(0, -1);
-      this.renderAnswer();
-      return;
-    }
-    if (!event.repeat) this.confirm();
+  }
+
+  private onPadKey(key: NumPadKey): void {
+    if (this.state.over || this.paused || this.revealMsLeft > 0) return;
+    if (key === 'back') this.backspace();
+    else if (key === 'ok') this.confirm();
+    else this.typeDigit(key);
+  }
+
+  private typeDigit(d: string): void {
+    audio.playSfx('key');
+    if (this.input$.length >= MAX_ANSWER_DIGITS) return;
+    this.input$ += d;
+    this.renderAnswer();
+  }
+
+  private backspace(): void {
+    audio.playSfx('key');
+    this.input$ = this.input$.slice(0, -1);
+    this.renderAnswer();
   }
 
   private confirm(): void {
@@ -222,17 +275,24 @@ export class BattleScene extends Phaser.Scene {
     else if (result === 'miss') this.onMiss();
   }
 
+  private openSettings(): void {
+    this.settingsOpen = true;
+    this.setPaused(true);
+    this.scene.launch('Settings', { overlay: true });
+  }
+
   // ---------- eventos del bucle ----------
 
   private onCorrect(): void {
+    audio.playSfx('correct');
     this.renderHud();
     this.renderProblem();
     this.hero.attack();
     this.monster.hit();
   }
 
-  /** El Pokémon cae y entra el siguiente, más resistente. La siguiente operación ya está en pantalla. */
   private onMonsterDefeated(): void {
+    audio.playSfx('defeated');
     this.defeatedNames.push(this.monster.pokemonName);
     this.renderHud();
     this.renderProblem();
@@ -248,43 +308,39 @@ export class BattleScene extends Phaser.Scene {
   }
 
   private onMiss(): void {
-    // Sin sonido. El aviso es visual: MISS sube 30 px y se desvanece en 700 ms.
-    this.tweens.killTweensOf(this.missLabel);
+    // Sin sonido: el aviso es visual.
+    this.missLabel.show();
+    if (this.reducedMotion) return;
     this.tweens.killTweensOf(this.answerGroup);
-    this.answerGroup.x = W / 2;
-    this.missLabel.setY(440).setAlpha(1);
-
-    if (this.reducedMotion) {
-      this.tweens.add({ targets: this.missLabel, alpha: 0, duration: 300, delay: 400 });
-      return;
-    }
-    this.tweens.add({ targets: this.missLabel, y: 410, duration: 700, ease: 'Quad.out' });
-    this.tweens.add({ targets: this.missLabel, alpha: 0, duration: 300, delay: 400 });
     this.tweens.add({
       targets: this.answerGroup,
-      x: { from: W / 2 - 10, to: W / 2 + 10 },
+      x: { from: 490, to: 510 },
       duration: 50,
       yoyo: true,
       repeat: 3,
-      onComplete: () => (this.answerGroup.x = W / 2),
+      onComplete: () => (this.answerGroup.x = 500),
     });
   }
 
   private onMonsterAttack(lost: Problem): void {
+    audio.playSfx('attack');
     this.input$ = '';
     this.renderAnswer();
     this.renderHud();
     this.showReveal(lost);
-    if (!this.reducedMotion) this.cameras.main.shake(250, 0.012);
+    this.shake(250, 0.012);
     this.monster.lunge();
     this.hero.hit();
   }
 
   private onGameOver(lost: Problem): void {
+    audio.playSfx('gameover');
+    audio.setTension(false);
     this.renderHud();
     this.showReveal(lost);
-    if (!this.reducedMotion) this.cameras.main.shake(400, 0.02);
-    this.tweens.add({ targets: this.cameras.main, alpha: 0, duration: 600, delay: GAME_OVER_DELAY_MS - 600 });
+    this.shake(400, 0.02);
+    this.numpad.setEnabled(false);
+    this.time.delayedCall(GAME_OVER_DELAY_MS - 500, () => this.cameras.main.fadeOut(500));
     this.time.delayedCall(GAME_OVER_DELAY_MS, () => {
       const params: ResultParams = {
         level: this.difficulty,
@@ -296,7 +352,6 @@ export class BattleScene extends Phaser.Scene {
         history: this.state.history,
         defeated: this.defeatedNames,
       };
-      this.cameras.main.setAlpha(1);
       this.scene.start('Result', params);
     });
   }
@@ -304,7 +359,18 @@ export class BattleScene extends Phaser.Scene {
   private setPaused(value: boolean): void {
     if (this.state.over) return;
     this.paused = value;
-    this.pauseLabel.setVisible(value);
+    this.pauseLabel.setVisible(value && !this.settingsOpen);
+  }
+
+  /** Sacudida de cámara con parallax leve de las capas de fondo. */
+  private shake(ms: number, intensity: number): void {
+    if (this.reducedMotion) return;
+    this.cameras.main.shake(ms, intensity);
+    this.layers.forEach((layer, i) => {
+      if (i === 0) return;
+      this.tweens.killTweensOf(layer);
+      this.tweens.add({ targets: layer, x: W / 2 + 4 * i, duration: 60, yoyo: true, repeat: 2, onComplete: () => (layer.x = W / 2) });
+    });
   }
 
   // ---------- render ----------
@@ -318,20 +384,20 @@ export class BattleScene extends Phaser.Scene {
 
   private renderHud(): void {
     const s = this.state;
-    this.hearts.forEach((h, i) => h.setFillStyle(i < s.hearts ? COLORS.heartOn : COLORS.heartOff));
+    this.heartBar.setHearts(s.hearts);
     this.correctText.setText(`Aciertos: ${s.correct}`);
     this.waveText.setText(`Oleada ${s.wave} · ${s.timeLimit} s`);
     this.monster.setHp(s.monsterHp, s.monsterMaxHp);
   }
 
   private renderProblem(): void {
-    this.problemText.setText(this.state.problem.text).setColor(COLORS.text);
+    this.problemText.setText(this.state.problem.text).setColor(this.theme.palette.text);
     this.renderTimer(0);
   }
 
-  /** Muestra medio segundo el resultado de la operación perdida antes de la siguiente. */
   private showReveal(lost: Problem): void {
-    this.problemText.setText(`${lost.text} = ${lost.answer}`).setColor(COLORS.miss);
+    const p = this.theme.palette;
+    this.problemText.setText(`${lost.text} = ${lost.answer}`).setColor(`#${p.accent.toString(16).padStart(6, '0')}`);
     this.revealMsLeft = REVEAL_MS;
     this.timerFill.width = 0;
   }
@@ -341,10 +407,11 @@ export class BattleScene extends Phaser.Scene {
   }
 
   private renderTimer(time: number): void {
+    const p = this.theme.palette;
     const ratio = this.state.timeLimit > 0 ? this.state.timeLeft / this.state.timeLimit : 0;
     this.timerFill.width = this.timerWidth * ratio;
-    const low = this.state.timeLeft < 2;
-    this.timerFill.setFillStyle(low ? COLORS.timerLow : COLORS.timer);
+    const low = this.state.timeLeft < LOW_TIME_S;
+    this.timerFill.setFillStyle(low ? p.dangerHex : p.secondary);
     this.timerFill.setAlpha(low && !this.reducedMotion ? 0.65 + 0.35 * Math.sin(time / 70) : 1);
   }
 }

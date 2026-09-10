@@ -1,10 +1,12 @@
 import Phaser from 'phaser';
 import { DIFFICULTY_LABELS } from '../config/difficulties';
+import { audio } from '../systems/AudioManager';
 import { summarizeFailures } from '../systems/BattleState';
 import { scores } from '../systems/scores/ScoreService';
 import type { BattleParams, ResultParams, SubmitOutcome } from '../types';
 import { Button } from '../ui/Button';
 import { bindWindowKeys } from '../ui/keys';
+import { addMuteButton } from '../ui/MuteButton';
 import { COLORS, H, NUMBER_FONT, UI_FONT, W } from '../ui/style';
 import type { LeaderboardParams } from './LeaderboardScene';
 
@@ -29,11 +31,14 @@ export class ResultScene extends Phaser.Scene {
   create(): void {
     const p = this.params;
     this.cameras.main.setBackgroundColor(COLORS.bg);
+    this.cameras.main.fadeIn(400);
+    audio.playMusic('menu');
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => (this.alive = false));
 
+    const opLabel = p.operation === 'dividir' ? 'División' : 'Multiplicación';
     this.add.text(W / 2, 55, 'Fin de la partida', { fontFamily: UI_FONT, fontSize: '52px', color: COLORS.text }).setOrigin(0.5);
     this.add
-      .text(W / 2, 105, `${p.name} · ${DIFFICULTY_LABELS[p.level].title}`, { fontFamily: UI_FONT, fontSize: '22px', color: COLORS.muted })
+      .text(W / 2, 105, `${p.name} · ${DIFFICULTY_LABELS[p.level].title} · ${opLabel}`, { fontFamily: UI_FONT, fontSize: '22px', color: COLORS.muted })
       .setOrigin(0.5);
 
     this.stat(W / 2 - 220, 195, p.correct, 'aciertos');
@@ -64,6 +69,7 @@ export class ResultScene extends Phaser.Scene {
     this.add
       .text(W / 2, H - 18, 'Enter: otra vez · R: ranking · Escape: cambiar nivel', { fontFamily: UI_FONT, fontSize: '16px', color: COLORS.muted })
       .setOrigin(0.5);
+    addMuteButton(this);
 
     bindWindowKeys(this, (e) => {
       if (e.repeat) return;
@@ -111,9 +117,7 @@ export class ResultScene extends Phaser.Scene {
       this.add
         .text(W / 2 - 40, y, `${f.problem.text} = ${f.problem.answer}`, { fontFamily: NUMBER_FONT, fontSize: '26px', color: COLORS.text })
         .setOrigin(1, 0.5);
-      this.add
-        .text(W / 2, y, detail.join(' · '), { fontFamily: UI_FONT, fontSize: '19px', color: f.solved ? COLORS.muted : COLORS.danger })
-        .setOrigin(0, 0.5);
+      this.add.text(W / 2, y, detail.join(' · '), { fontFamily: UI_FONT, fontSize: '19px', color: f.solved ? COLORS.muted : COLORS.danger }).setOrigin(0, 0.5);
     });
 
     if (failures.length > shown.length) {

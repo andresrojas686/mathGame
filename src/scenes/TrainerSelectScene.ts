@@ -1,6 +1,8 @@
 import Phaser from 'phaser';
 import { TRAINERS, trainerTextureKey } from '../config/trainers';
+import { audio } from '../systems/AudioManager';
 import { loadLastTrainer, saveLastTrainer } from '../systems/Preferences';
+import { addMuteButton } from '../ui/MuteButton';
 import { bindWindowKeys } from '../ui/keys';
 import { COLORS, H, UI_FONT, W } from '../ui/style';
 
@@ -29,6 +31,8 @@ export class TrainerSelectScene extends Phaser.Scene {
 
   create(): void {
     this.cameras.main.setBackgroundColor(COLORS.bg);
+    audio.playMusic('menu');
+    addMuteButton(this);
     this.add
       .text(W / 2, 70, `${this.name}, elige tu líder de gimnasio`, { fontFamily: UI_FONT, fontSize: '44px', color: COLORS.text })
       .setOrigin(0.5);

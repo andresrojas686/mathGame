@@ -1,4 +1,4 @@
-import { MAX_NAME_LENGTH } from '../types';
+import { MAX_NAME_LENGTH, type Operation } from '../types';
 
 const NAME_KEY = 'multiplicon.name';
 const TRAINER_KEY = 'multiplicon.trainer';
@@ -31,6 +31,16 @@ export function loadLastName(): string {
 
 export function saveLastName(name: string): void {
   write(NAME_KEY, sanitizeName(name));
+}
+
+const OPERATION_KEY = 'multiplicon.operation';
+
+export function loadLastOperation(): Operation {
+  return read(OPERATION_KEY) === 'dividir' ? 'dividir' : 'multiplicar';
+}
+
+export function saveLastOperation(op: Operation): void {
+  write(OPERATION_KEY, op);
 }
 
 export function loadLastTrainer(): string {

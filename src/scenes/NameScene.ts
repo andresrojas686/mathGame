@@ -1,5 +1,7 @@
 ﻿import Phaser from 'phaser';
+import { audio } from '../systems/AudioManager';
 import { loadLastName, sanitizeName, saveLastName } from '../systems/Preferences';
+import { addMuteButton } from '../ui/MuteButton';
 import { MAX_NAME_LENGTH } from '../types';
 import { Button } from '../ui/Button';
 import { bindWindowKeys } from '../ui/keys';
@@ -18,6 +20,8 @@ export class NameScene extends Phaser.Scene {
 
   create(): void {
     this.cameras.main.setBackgroundColor(COLORS.bg);
+    audio.playMusic('menu');
+    addMuteButton(this);
 
     this.add
       .text(W / 2, H / 2 - 150, '¿Cómo te llamas?', { fontFamily: UI_FONT, fontSize: '56px', color: COLORS.text })

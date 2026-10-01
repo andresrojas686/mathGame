@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { TRAINERS, trainerTextureKey } from '../config/trainers';
 import { audio } from '../systems/AudioManager';
+import { getOnlineIntent } from '../systems/online/session';
 import { loadLastTrainer, saveLastTrainer } from '../systems/Preferences';
 import { addMuteButton } from '../ui/MuteButton';
 import { bindWindowKeys } from '../ui/keys';
@@ -104,6 +105,11 @@ export class TrainerSelectScene extends Phaser.Scene {
   private choose(): void {
     const trainer = TRAINERS[this.focus]!;
     saveLastTrainer(trainer.id);
+    // Quien entra por un enlace no elige nivel: lo decidió el anfitrión de la sala.
+    if (getOnlineIntent()?.mode === 'join') {
+      this.scene.start('Lobby', { name: this.name, trainer: trainer.id });
+      return;
+    }
     this.scene.start('LevelSelect', { name: this.name, trainer: trainer.id });
   }
 }

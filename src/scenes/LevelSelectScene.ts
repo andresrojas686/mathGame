@@ -3,6 +3,7 @@ import { DIFFICULTIES, DIFFICULTY_IDS, DIFFICULTY_LABELS, timeLimitForWave } fro
 import { DEFAULT_TRAINER_ID } from '../config/trainers';
 import { audio } from '../systems/AudioManager';
 import { DIVISION_TIME_FACTOR } from '../systems/BattleState';
+import { getOnlineIntent } from '../systems/online/session';
 import { loadLastOperation, saveLastOperation } from '../systems/Preferences';
 import type { BattleParams, DifficultyConfig, DifficultyId, Operation } from '../types';
 import { bindWindowKeys } from '../ui/keys';
@@ -163,6 +164,10 @@ export class LevelSelectScene extends Phaser.Scene {
 
   private choose(level: DifficultyId): void {
     const params: BattleParams = { level, operation: this.operation, name: this.name, trainer: this.trainer };
+    if (getOnlineIntent()?.mode === 'create') {
+      this.scene.start('Lobby', { ...params });
+      return;
+    }
     this.scene.start('Battle', params);
   }
 }

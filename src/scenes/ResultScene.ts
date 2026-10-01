@@ -3,6 +3,7 @@ import { DIFFICULTY_LABELS } from '../config/difficulties';
 import { audio } from '../systems/AudioManager';
 import { summarizeFailures } from '../systems/BattleState';
 import { scores } from '../systems/scores/ScoreService';
+import { roomClient } from '../systems/online/RoomClient';
 import type { BattleParams, ResultParams, SubmitOutcome } from '../types';
 import { Button } from '../ui/Button';
 import { bindWindowKeys } from '../ui/keys';
@@ -12,8 +13,11 @@ import type { LeaderboardParams } from './LeaderboardScene';
 
 const MAX_FAILURES_SHOWN = 5;
 
+/** Si la partida venía de una sala, el resultado conserva el camino de vuelta. */
+type ResultSceneParams = ResultParams & { online?: { seed: number; code: string } };
+
 export class ResultScene extends Phaser.Scene {
-  private params!: ResultParams;
+  private params!: ResultSceneParams;
   private outcome: SubmitOutcome | null = null;
   private status!: Phaser.GameObjects.Text;
   private alive = true;
@@ -22,7 +26,7 @@ export class ResultScene extends Phaser.Scene {
     super('Result');
   }
 
-  init(data: ResultParams): void {
+  init(data: ResultSceneParams): void {
     this.params = data;
     this.outcome = null;
     this.alive = true;
@@ -61,13 +65,21 @@ export class ResultScene extends Phaser.Scene {
       const lp: LeaderboardParams = { level: p.level, operation: p.operation, name: p.name, trainer: p.trainer, highlight: this.outcome ?? undefined };
       this.scene.start('Leaderboard', lp);
     };
-    const menu = () => this.scene.start('LevelSelect', { name: p.name, trainer: p.trainer });
+    const inRoom = Boolean(p.online && roomClient.room);
+    const menu = () => {
+      if (inRoom) this.scene.start('RoomResult', p);
+      else this.scene.start('LevelSelect', { name: p.name, trainer: p.trainer });
+    };
 
     new Button(this, W / 2 - 300, H - 60, 'Jugar otra vez', again, { width: 260, height: 60, fontSize: '24px' }).setFocused(true);
     new Button(this, W / 2, H - 60, 'Ver ranking', ranking, { width: 260, height: 60, fontSize: '24px' });
-    new Button(this, W / 2 + 300, H - 60, 'Cambiar nivel', menu, { width: 260, height: 60, fontSize: '24px' });
+    new Button(this, W / 2 + 300, H - 60, inRoom ? 'Volver a la sala' : 'Cambiar nivel', menu, { width: 260, height: 60, fontSize: '24px' });
     this.add
-      .text(W / 2, H - 18, 'Enter: otra vez · R: ranking · Escape: cambiar nivel', { fontFamily: UI_FONT, fontSize: '16px', color: COLORS.muted })
+      .text(W / 2, H - 18, `Enter: otra vez · R: ranking · Escape: ${inRoom ? 'volver a la sala' : 'cambiar nivel'}`, {
+        fontFamily: UI_FONT,
+        fontSize: '16px',
+        color: COLORS.muted,
+      })
       .setOrigin(0.5);
     addMuteButton(this);
 

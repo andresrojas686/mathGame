@@ -698,6 +698,18 @@ Elección de operación en la pantalla de nivel: multiplicar o dividir, con divi
 ### Fase 6 — Publicación ✔
 `manifest.json` con iconos SVG para instalar como app en horizontal, `theme-color`, tipografía y assets locales sin dependencias externas salvo PokéAPI. Dominio y HTTPS se configuran en Dokploy (ver `instrucciones.md`); el manifest exige HTTPS para ofrecer la instalación.
 
+### Fase 7 — Salas multijugador ✔
+Partidas de hasta 50 jugadores con enlace compartido. El servidor guarda las salas en memoria (`server/rooms.ts`) y las expone por WebSocket en `/ws` (`server/roomSocket.ts`); el cliente las consume con `RoomClient` y las pinta en `LobbyScene`, el marcador en vivo del combate y `RoomResultScene`.
+
+La partida es justa porque la sala reparte una **semilla**: todos construyen las operaciones con `mulberry32(seed)` en lugar de `Math.random`, así que la secuencia es idéntica para todos y nadie gana por haberle tocado tablas más fáciles. Cada jugador conserva su propio reloj y sus propios corazones; lo único compartido es qué operaciones salen y en qué orden.
+
+Decisiones que vale la pena recordar:
+
+- **Sin persistencia de salas.** Una sala dura lo que la partida. Reiniciar el servidor las borra, y está bien: lo que no se puede perder es el ranking, que sigue en `data/scores.json`.
+- **Desconectarse termina tu partida.** Si no, una pestaña cerrada dejaría a los demás esperando para siempre en la pantalla de resultados.
+- **Nadie entra a mitad de partida.** Llegar tarde a una secuencia de operaciones que los demás ya llevan resolviendo no es una competencia.
+- **El marcador se envía agrupado** (250 ms en cliente y servidor). Con 50 jugadores respondiendo, un mensaje por acierto es ruido.
+
 ---
 
 ## 13. Detalles a cuidar
@@ -715,7 +727,8 @@ Elección de operación en la pantalla de nivel: multiplicar o dividir, con divi
 
 Fuera del alcance de la v1, anotado para no cerrarle la puerta:
 
-- **Dos jugadores en el mismo dispositivo.** Turnos alternados contra el mismo Pokémon, o marcadores separados en pantalla dividida. Afecta el modelo de partida y el ranking, así que conviene decidir la forma antes de empezarlo, no durante.
+- **Dos jugadores en el mismo dispositivo.** Turnos alternados contra el mismo Pokémon, o marcadores separados en pantalla dividida. El multijugador de la fase 7 es en red y por enlace; esto sería otra cosa.
+- **Salas con límite de tiempo.** Hoy la partida termina cuando cada quien pierde sus corazones. Una variante a 90 segundos haría las rondas más parejas y cortas.
 - **Sumas y restas.** `Problem` ya expone `text` y `answer`, y el ranking ya separa por operación, así que agregar un generador nuevo no obliga a tocar `BattleScene`.
 - **Panel para docentes.** Ver el historial de operaciones falladas por niño y detectar qué tabla se le dificulta. Los datos ya se recogen durante la partida; falta persistirlos y mostrarlos.
 - **Ranking por curso.** Separar los rankings con un identificador de grupo para que compitan solo entre compañeros.

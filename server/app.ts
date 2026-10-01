@@ -1,6 +1,7 @@
 import { serveStatic } from '@hono/node-server/serve-static';
 import { Hono } from 'hono';
 import path from 'node:path';
+import type { RoomManager } from './rooms.js';
 import type { ScoreStore } from './scoreStore.js';
 import { parseScoreInput, ValidationError } from './validation.js';
 
@@ -8,13 +9,21 @@ import { parseScoreInput, ValidationError } from './validation.js';
 export const SHOW_PER_BOARD = 10;
 
 /**
- * API del ranking y, si se indica `distDir`, los estáticos del build de Vite.
+ * API del ranking y de las salas y, si se indica `distDir`, los estáticos del build de Vite.
  * Separado de index.ts para poder probarlo con `app.request()` sin abrir un puerto.
  */
-export function createApp(store: ScoreStore, distDir: string | null): Hono {
+export function createApp(store: ScoreStore, distDir: string | null, rooms?: RoomManager): Hono {
   const app = new Hono();
 
   app.get('/api/health', (c) => c.json({ ok: true }));
+
+  // Permite saber si el enlace de una sala sigue vivo antes de abrir el WebSocket.
+  app.get('/api/rooms/:code', (c) => {
+    if (!rooms) return c.json({ error: 'multijugador no disponible' }, 503);
+    const summary = rooms.summary(c.req.param('code'));
+    if (!summary) return c.json({ error: 'sala no encontrada' }, 404);
+    return c.json(summary);
+  });
 
   app.get('/api/leaderboard', async (c) => {
     const data = await store.leaderboard();

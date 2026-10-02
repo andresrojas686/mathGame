@@ -1,15 +1,15 @@
 import type { DifficultyConfig, DifficultyId } from '../types';
 
 /** Tiempo de respuesta en la primera oleada, en segundos. */
-export const INITIAL_TIME = 7;
+export const INITIAL_TIME = 20;
 
 /** Segundos que se restan por cada oleada superada, hasta llegar al piso del nivel. */
-export const TIME_STEP_PER_WAVE = 0.5;
+export const TIME_STEP_PER_WAVE = 1;
 
 export const DIFFICULTIES: Record<DifficultyId, DifficultyConfig> = {
   facil: {
     id: 'facil',
-    hearts: 10,
+    hearts: 3,
     multiplicandDigits: [1],
     multiplierDigits: [1],
     dividendDigits: [2],
@@ -23,16 +23,16 @@ export const DIFFICULTIES: Record<DifficultyId, DifficultyConfig> = {
     multiplierDigits: [1, 2],
     dividendDigits: [2, 3],
     divisorDigits: [1, 2],
-    timeFloor: 12,
+    timeFloor: 10,
   },
   dificil: {
     id: 'dificil',
-    hearts: 3,
-    multiplicandDigits: [3, 4, 5],
+    hearts: 7,
+    multiplicandDigits: [2, 3, 4, 5],
     multiplierDigits: [1, 2],
     dividendDigits: [2, 3, 4],
-    divisorDigits: [1, 2, 3],
-    timeFloor: 9,
+    divisorDigits: [2, 3],
+    timeFloor: 7,
   },
 };
 

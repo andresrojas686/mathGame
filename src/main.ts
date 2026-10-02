@@ -2,9 +2,11 @@ import Phaser from 'phaser';
 import { BattleScene } from './scenes/BattleScene';
 import { LeaderboardScene } from './scenes/LeaderboardScene';
 import { LevelSelectScene } from './scenes/LevelSelectScene';
+import { LobbyScene } from './scenes/LobbyScene';
 import { NameScene } from './scenes/NameScene';
 import { PreloadScene } from './scenes/PreloadScene';
 import { ResultScene } from './scenes/ResultScene';
+import { RoomResultScene } from './scenes/RoomResultScene';
 import { SettingsScene } from './scenes/SettingsScene';
 import { TitleScene } from './scenes/TitleScene';
 import { TrainerSelectScene } from './scenes/TrainerSelectScene';
@@ -39,7 +41,19 @@ async function boot(): Promise<void> {
       mode: Phaser.Scale.FIT,
       autoCenter: Phaser.Scale.CENTER_BOTH,
     },
-    scene: [PreloadScene, TitleScene, NameScene, TrainerSelectScene, LevelSelectScene, BattleScene, ResultScene, LeaderboardScene, SettingsScene],
+    scene: [
+      PreloadScene,
+      TitleScene,
+      NameScene,
+      TrainerSelectScene,
+      LevelSelectScene,
+      LobbyScene,
+      BattleScene,
+      ResultScene,
+      RoomResultScene,
+      LeaderboardScene,
+      SettingsScene,
+    ],
   });
 
   // Solo en desarrollo: permite inspeccionar y automatizar el juego desde la consola o pruebas E2E.

@@ -3,6 +3,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { createApp } from './app';
+import { RoomManager } from './rooms';
 import { ScoreStore } from './scoreStore';
 
 describe('API', () => {
@@ -52,5 +53,31 @@ describe('API', () => {
     const res = await app.request('/api/nada');
     expect(res.status).toBe(404);
     expect((await res.json()).error).toBeDefined();
+  });
+});
+
+describe('API de salas', () => {
+  it('GET /api/rooms/:code describe una sala viva e ignora mayúsculas', () => {
+    const rooms = new RoomManager();
+    const app = createApp(new ScoreStore('/tmp/no-se-escribe.json'), null, rooms);
+    const { room } = rooms.create({ name: 'Ana', trainer: 'misty', level: 'facil', operation: 'multiplicar' });
+    return app
+      .request(`/api/rooms/${room.code.toLowerCase()}`)
+      .then(async (res) => {
+        expect(res.status).toBe(200);
+        expect(await res.json()).toMatchObject({ code: room.code, state: 'lobby', players: 1, max: 50 });
+      });
+  });
+
+  it('GET /api/rooms/:code responde 404 si la sala no existe', async () => {
+    const app = createApp(new ScoreStore('/tmp/no-se-escribe.json'), null, new RoomManager());
+    const res = await app.request('/api/rooms/ZZZZZ');
+    expect(res.status).toBe(404);
+  });
+
+  it('sin multijugador el endpoint responde 503', async () => {
+    const app = createApp(new ScoreStore('/tmp/no-se-escribe.json'), null);
+    const res = await app.request('/api/rooms/ZZZZZ');
+    expect(res.status).toBe(503);
   });
 });

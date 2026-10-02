@@ -1,6 +1,6 @@
 # Instrucciones — lanzar y probar Multiplicón
 
-Estado actual: **v1 completa** (fases 1 a 6 de `plan.md`). Multiplicación y división, tres gimnasios Pokémon con arte propio, teclado en pantalla, audio sintetizado con ajustes, ranking con servidor y manifest para instalar como app.
+Estado actual: **v1 completa** (fases 1 a 6 de `plan.md`) más **salas multijugador** (fase 7). Multiplicación y división, tres gimnasios Pokémon con arte propio, teclado en pantalla, audio sintetizado con ajustes, ranking con servidor, partidas de hasta 50 jugadores por enlace y manifest para instalar como app.
 
 ## Arranque rápido (5 comandos)
 
@@ -76,22 +76,51 @@ Si solo lanzas `pnpm dev`, el juego funciona pero el ranking se guarda en el nav
 
 ```
 Título ─┬─> Nombre ─> Entrenador ─> Operación y nivel ─> Combate ─> Resultado ─┬─> Ranking
-        ├─> Ranking                                        │                     └─> otra partida / cambiar nivel
-        └─> Ajustes                                        └─ Esc: pausa + Ajustes en overlay
+        │                                  │                │                   └─> otra partida / cambiar nivel
+        │                                  └─> Sala ────────┘ (multijugador)     Esc: pausa + Ajustes en overlay
+        ├─> Ranking
+        └─> Ajustes
+
+Invitado con enlace: Título ─> Nombre ─> Entrenador ─> Sala ─> Combate ─> Resultado de la sala
 ```
 
 | Pantalla | Teclado | Ratón / táctil |
 |---|---|---|
-| Título | Enter juega · R ranking · A ajustes · M silencio | Botones |
+| Título | Enter juega · J juega con amigos · R ranking · A ajustes · M silencio | Botones |
 | Nombre | Escribir, Enter. Máx. 12 caracteres, recuerda el último | Campo de texto y botón |
 | Entrenador | Flechas y Enter. Escape vuelve a Nombre | Clic en un líder |
 | Operación y nivel | M / D o Tab cambia la operación · ← → y Enter, o 1 / 2 / 3 · Escape vuelve a Entrenador | Clic en operación y tarjeta |
+| Sala | Enter empieza (anfitrión) · C copia el enlace · Escape sale | Botones |
 | Combate | Dígitos, Backspace, Enter · Esc pausa y abre Ajustes | Teclado numérico en pantalla |
 | Resultado | Enter otra vez · R ranking · Escape cambiar nivel | Botones |
+| Resultado de sala | Enter nueva ronda (anfitrión) · D ver fallos · Escape salir | Botones |
 | Ranking | ← → nivel · M / D operación · Enter jugar · Escape menú | Pestañas y botones |
 | Ajustes | Escape cierra · M silencio | Todo con clic |
 
 El botón de silencio está siempre en la esquina inferior derecha.
+
+## Jugar varios en la misma sala
+
+Hasta **50 jugadores** compiten en la misma partida: todos reciben **exactamente las mismas operaciones, en el mismo orden**, y gana quien acumule más aciertos antes de quedarse sin corazones.
+
+**Para crear una sala:**
+
+1. En el título, pulsa **Jugar con amigos** (o `J`).
+2. Escribe tu nombre, elige líder, operación y nivel. Quien crea la sala decide por todos.
+3. Aparece un código de cinco caracteres (por ejemplo `AB2CD`) y un enlace como `http://localhost:8787/?sala=AB2CD`. Pulsa **Copiar enlace** o `C` y compártelo.
+4. Cuando estén todos, pulsa **Empezar partida**. Hay una cuenta atrás de 3 segundos y arranca el combate.
+
+**Para entrar:** abre el enlace y el botón principal pasa a ser "Entrar a la sala AB2CD"; solo hay que poner nombre y elegir líder. Sin el enlace, el código funciona igual escribiéndolo en la URL (`?sala=AB2CD`).
+
+Durante el combate, abajo a la izquierda se ve el marcador en vivo con las primeras posiciones y la propia. Al perder el último corazón se pasa al resultado de la sala, que muestra el marcador completo, espera a quienes sigan jugando y manda la puntuación al ranking de siempre. El anfitrión puede lanzar una **nueva ronda** con la misma gente y otra semilla.
+
+Detalles que conviene saber:
+
+- La sala vive en memoria del servidor: si el servidor se reinicia, las salas abiertas se pierden (el ranking no, ese está en `data/scores.json`).
+- Quien cierra la pestaña a mitad de partida conserva su puntaje, pero queda marcado como terminado para no dejar al resto esperando.
+- Nadie puede entrar a una partida ya empezada; hay que esperar a la siguiente ronda.
+- El anfitrión es quien creó la sala. Si se va, el relevo pasa a otro jugador automáticamente.
+- Para jugar entre equipos distintos, el servidor debe ser accesible para todos: misma red local (`http://IP-DEL-PC:8787/?sala=...`), un túnel tipo Cloudflare Tunnel, o un despliegue. El proxy que haya en medio tiene que permitir **WebSocket** en la ruta `/ws`; Dokploy y Traefik lo hacen sin configuración extra.
 
 ## Atajo para probar un nivel directo
 
@@ -109,11 +138,12 @@ El botón de silencio está siempre en la esquina inferior derecha.
 8. **Preferencia inválida.** En consola: `localStorage.setItem('multiplicon.feedback', '{"correctId":"trompeta"}')` y recarga. El juego arranca con la campana por defecto, sin error.
 9. **Silencio y foco.** M o el botón de la esquina silencian todo. Al cambiar de pestaña, se pausan el reloj y el audio.
 10. **Instalación como app.** En Chrome de escritorio o Android aparece "Instalar Multiplicón" (manifest, icono y modo pantalla completa en horizontal). En vertical en un móvil se muestra "Gira el dispositivo".
-11. **Pokémon, ranking, sin red y servidor caído.** Igual que en la fase 3: Pokémon aleatorio con ilustración, rectángulo sin red, ranking con seis tablas (operación × nivel), respaldo local y reenvío de pendientes.
+11. **Sala multijugador.** Abre el juego en dos navegadores (o en dos pestañas de incógnito). En uno crea la sala y copia el enlace; en el otro ábrelo. El segundo nombre aparece en la lista del primero en menos de un segundo. Empieza: los dos ven la **misma primera operación**. Responde en uno y mira cómo sube su fila en el marcador del otro. Cierra una pestaña a mitad de partida: el otro ve que ese jugador quedó terminado. Al acabar los dos, el resultado de la sala anuncia al ganador.
+12. **Pokémon, ranking, sin red y servidor caído.** Igual que en la fase 3: Pokémon aleatorio con ilustración, rectángulo sin red, ranking con seis tablas (operación × nivel), respaldo local y reenvío de pendientes.
 
 ## Pruebas automáticas
 
-Cliente (generadores de multiplicación y división, estado del combate, resumen de fallos, ranking local, PokéAPI, validación de ajustes) y servidor (orden, escritura atómica, concurrencia, validación, rutas). No necesitan navegador ni red.
+Cliente (generadores de multiplicación y división, estado del combate, resumen de fallos, ranking local, PokéAPI, validación de ajustes, semilla compartida y enlaces de sala) y servidor (orden, escritura atómica, concurrencia, validación, rutas, lógica de salas y una partida completa de 50 jugadores sobre WebSocket real). No necesitan navegador ni red.
 
 ```bash
 pnpm test          # una pasada
@@ -127,7 +157,7 @@ pnpm build         # tsc + vite build → dist/   y   tsc servidor → dist-serv
 pnpm start         # sirve dist/ y la API en http://localhost:8787
 ```
 
-Comprueba `http://localhost:8787/api/health` → `{"ok":true}` y `http://localhost:8787/manifest.json`.
+Comprueba `http://localhost:8787/api/health` → `{"ok":true}` y `http://localhost:8787/manifest.json`. Las salas usan el mismo puerto: WebSocket en `/ws` y consulta de una sala en `/api/rooms/AB2CD`.
 
 Variables de entorno del servidor: `PORT` (8787), `DATA_DIR` (carpeta de `scores.json`, por defecto `./data`), `DIST_DIR` (build del cliente, por defecto `./dist`).
 
@@ -196,11 +226,18 @@ En macOS o Linux: `lsof -ti:5173 | xargs kill` y `lsof -ti:8787 | xargs kill`.
 | No suena nada | El navegador bloquea el audio hasta el primer clic o tecla. Comprueba también el botón de silencio de la esquina y los volúmenes en Ajustes. |
 | El texto sale con otra fuente | No se cargó `assets/fonts/atkinson.css`. Recarga con la caché vacía (Ctrl+Shift+R). |
 | Pantalla "Gira el dispositivo" | Estás en vertical en un móvil o tablet. Gira a horizontal. |
+| "Se perdió la conexión con el servidor" en la sala | El servidor se reinició o lo corta un proxy. En desarrollo, comprueba que `pnpm dev:server` sigue vivo; detrás de un proxy, que permita WebSocket en `/ws`. |
+| El enlace de la sala no funciona para los demás | Están abriendo `localhost`, que en su equipo es su propio PC. Comparte la IP de tu máquina o publica el juego. |
+| "La sala ya empezó" al entrar | Solo se entra desde el lobby. Pide al anfitrión una nueva ronda al terminar. |
 
 ## Estructura relevante
 
 ```
 server/                        API Hono: app.ts, scoreStore.ts, validation.ts, badwords.ts, *.test.ts
+├── rooms.ts                   salas en memoria: crear, entrar, empezar, marcador, limpieza
+├── roomSocket.ts              WebSocket /ws: un socket es un jugador
+├── roomMessages.ts            validación de lo que manda el cliente
+└── roomTypes.ts               protocolo y topes (50 jugadores, código de 5 caracteres)
 scripts/                       fetch-trainers.mjs, fetch-fonts.mjs
 public/
 ├── manifest.json, icon.svg    instalación como app
@@ -222,12 +259,14 @@ src/
 │   ├── AudioManager.ts        síntesis, capa de tensión, ducking, autoplay, foco
 │   ├── FeedbackSettings.ts    preferencias validadas contra el catálogo
 │   ├── Preferences.ts         nombre, entrenador y operación recordados
+│   ├── seededRng.ts           mismas operaciones para toda la sala a partir de una semilla
+│   ├── online/                RoomClient.ts (WebSocket), session.ts (enlaces), protocol.ts
 │   ├── pokemon/PokeApi.ts
 │   └── scores/
 ├── ui/
-│   ├── NumPad.ts · MissLabel.ts · HeartBar.ts · MuteButton.ts
+│   ├── NumPad.ts · MissLabel.ts · HeartBar.ts · MuteButton.ts · RoomScoreboard.ts
 │   ├── HeroView.ts · MonsterView.ts
 │   └── Button.ts · keys.ts · style.ts
 └── scenes/
-    Preload · Title · Name · TrainerSelect · LevelSelect · Battle · Result · Leaderboard · Settings
+    Preload · Title · Name · TrainerSelect · LevelSelect · Lobby · Battle · Result · RoomResult · Leaderboard · Settings
 ```

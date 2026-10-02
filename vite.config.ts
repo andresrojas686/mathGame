@@ -6,6 +6,8 @@ export default defineConfig({
     proxy: {
       // Servidor Hono del ranking: `pnpm dev:server` en otra terminal.
       '/api': 'http://localhost:8787',
+      // Salas multijugador. Sin ws: true Vite devolvería un 426 al abrir el socket.
+      '/ws': { target: 'ws://localhost:8787', ws: true },
     },
   },
   build: {

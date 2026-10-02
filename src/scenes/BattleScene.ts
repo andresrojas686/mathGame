@@ -5,8 +5,10 @@ import { DEFAULT_TRAINER_ID } from '../config/trainers';
 import { audio } from '../systems/AudioManager';
 import { BattleState } from '../systems/BattleState';
 import { missTextFor } from '../systems/FeedbackSettings';
+import { roomClient, type RoomEvent } from '../systems/online/RoomClient';
 import type { PokemonInfo } from '../systems/pokemon/PokeApi';
 import { PokemonSource } from '../systems/pokemon/PokemonSource';
+import { mulberry32 } from '../systems/seededRng';
 import type { BattleParams, DifficultyId, Operation, Problem, ResultParams } from '../types';
 import { HeartBar } from '../ui/HeartBar';
 import { HeroView } from '../ui/HeroView';
@@ -15,8 +17,16 @@ import { MissLabel } from '../ui/MissLabel';
 import { MonsterView } from '../ui/MonsterView';
 import { addMuteButton } from '../ui/MuteButton';
 import { NumPad, type NumPadKey } from '../ui/NumPad';
+import { RoomScoreboard } from '../ui/RoomScoreboard';
 import { H, NUMBER_FONT, prefersReducedMotion, UI_FONT, W } from '../ui/style';
+import type { RoomResultParams } from './RoomResultScene';
 import { SETTINGS_CLOSED_EVENT } from './SettingsScene';
+
+/** Datos de sala que llegan desde el lobby. Sin esto la partida es individual. */
+export interface OnlineBattleInfo {
+  seed: number;
+  code: string;
+}
 
 /** Máximo de cifras de un resultado: 99999 × 999 = 99 899 001 → 8 cifras. Una de margen. */
 const MAX_ANSWER_DIGITS = 9;
@@ -33,6 +43,9 @@ export class BattleScene extends Phaser.Scene {
   private trainerId = DEFAULT_TRAINER_ID;
   private theme!: Theme;
   private reducedMotion = false;
+  private online: OnlineBattleInfo | null = null;
+  private scoreboard: RoomScoreboard | null = null;
+  private unsubscribeRoom: (() => void) | null = null;
 
   private input$ = '';
   private paused = false;
@@ -62,14 +75,19 @@ export class BattleScene extends Phaser.Scene {
     super('Battle');
   }
 
-  init(data: Partial<BattleParams>): void {
+  init(data: Partial<BattleParams> & { online?: OnlineBattleInfo }): void {
     const param = new URLSearchParams(window.location.search).get('level');
     this.difficulty = data.level ?? (isDifficultyId(param) ? param : 'facil');
     this.operation = data.operation ?? 'multiplicar';
     this.playerName = data.name ?? 'Jugador';
     this.trainerId = data.trainer ?? DEFAULT_TRAINER_ID;
     this.theme = THEMES[this.difficulty];
-    this.state = new BattleState(DIFFICULTIES[this.difficulty], this.operation);
+    this.online = data.online ?? null;
+    // En sala, la semilla compartida hace que todos reciban las mismas operaciones
+    // en el mismo orden: la partida se gana resolviendo, no por tener suerte.
+    const rng = this.online ? mulberry32(this.online.seed) : Math.random;
+    this.state = new BattleState(DIFFICULTIES[this.difficulty], this.operation, rng);
+    this.scoreboard = null;
     this.input$ = '';
     this.paused = false;
     this.settingsOpen = false;
@@ -91,6 +109,7 @@ export class BattleScene extends Phaser.Scene {
     this.buildProblem();
     this.buildAnswer();
     addMuteButton(this, p.text);
+    if (this.online) this.buildScoreboard();
     bindWindowKeys(this, (e) => this.onKey(e));
     this.bindFocus();
     this.renderAll();
@@ -117,6 +136,39 @@ export class BattleScene extends Phaser.Scene {
 
     if (result.type === 'hit') this.onMonsterAttack(result.lost);
     else if (result.type === 'gameover') this.onGameOver(result.lost);
+  }
+
+  // ---------- sala ----------
+
+  private buildScoreboard(): void {
+    const p = this.theme.palette;
+    this.scoreboard = new RoomScoreboard(this, 180, 560, {
+      width: 300,
+      rows: 6,
+      fontSize: 19,
+      title: `Sala ${this.online?.code ?? ''}`,
+      textColor: p.text,
+      mutedColor: p.muted,
+      accentColor: `#${p.accent.toString(16).padStart(6, '0')}`,
+      background: p.bg,
+    }).setDepth(40);
+    this.scoreboard.render(roomClient.room, roomClient.playerId);
+
+    const onRoom = (event: RoomEvent) => {
+      if (event.type === 'room') this.scoreboard?.render(event.room, roomClient.playerId);
+      else if (event.type === 'closed') this.scoreboard?.setTitle('Sala: sin conexión');
+    };
+    this.unsubscribeRoom = roomClient.on(onRoom);
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+      this.unsubscribeRoom?.();
+      this.unsubscribeRoom = null;
+    });
+  }
+
+  /** Marcador en vivo para el resto de la sala. El propio cliente lo agrupa antes de enviarlo. */
+  private pushProgress(): void {
+    if (!this.online) return;
+    roomClient.progress(this.state.correct, this.state.wavesCleared);
   }
 
   // ---------- Pokémon ----------
@@ -284,6 +336,7 @@ export class BattleScene extends Phaser.Scene {
 
   private onCorrect(): void {
     audio.playSfx('correct');
+    this.pushProgress();
     this.renderHud();
     this.renderProblem();
     this.hero.attack();
@@ -292,6 +345,7 @@ export class BattleScene extends Phaser.Scene {
 
   private onMonsterDefeated(): void {
     audio.playSfx('defeated');
+    this.pushProgress();
     this.defeatedNames.push(this.monster.pokemonName);
     this.renderHud();
     this.renderProblem();
@@ -340,6 +394,10 @@ export class BattleScene extends Phaser.Scene {
     this.shake(400, 0.02);
     this.numpad.setEnabled(false);
     this.time.delayedCall(GAME_OVER_DELAY_MS - 500, () => this.cameras.main.fadeOut(500));
+    // El servidor se entera del resultado antes de la animación de cierre: si el jugador
+    // cierra la pestaña en estos dos segundos, su puntaje ya está en la sala.
+    if (this.online) roomClient.finish(this.state.correct, this.state.wavesCleared);
+
     this.time.delayedCall(GAME_OVER_DELAY_MS, () => {
       const params: ResultParams = {
         level: this.difficulty,
@@ -351,6 +409,11 @@ export class BattleScene extends Phaser.Scene {
         history: this.state.history,
         defeated: this.defeatedNames,
       };
+      if (this.online) {
+        const online: RoomResultParams = { ...params, online: this.online };
+        this.scene.start('RoomResult', online);
+        return;
+      }
       this.scene.start('Result', params);
     });
   }

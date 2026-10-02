@@ -12,8 +12,17 @@
     <link rel="stylesheet" href="/assets/fonts/atkinson.css" />
     <style>
       html, body { margin: 0; padding: 0; background: #1e1e2e; height: 100%; overflow: hidden; }
-      #game { width: 100%; height: 100%; }
+      /* El juego cede la franja inferior al aviso legal: así el canvas nunca queda tapado. */
+      #game { width: 100%; height: calc(100% - 30px); }
       canvas { display: block; margin: 0 auto; }
+      #aviso {
+        position: fixed; left: 0; right: 0; bottom: 0; height: 30px;
+        display: flex; align-items: center; justify-content: center;
+        padding: 0 12px; box-sizing: border-box; background: #181826; color: #8b8ba0;
+        font: 11px/1.3 "Atkinson Hyperlegible", "Segoe UI", Arial, sans-serif; text-align: center;
+      }
+      #aviso p { margin: 0; }
+      @media (max-width: 760px) { #aviso { font-size: 9.5px; } }
       /* En vertical (tablet en retrato) se pide girar el dispositivo en vez de intentar otro layout. */
       #rotate {
         display: none; position: fixed; inset: 0; z-index: 1000; background: #1e1e2e; color: #f2e9d8;
@@ -29,6 +38,15 @@
   <body>
     <div id="game"></div>
     <div id="rotate" role="status"><div><span>📱↻</span>Gira el dispositivo para jugar</div></div>
+    <footer id="aviso">
+      <p>
+        Proyecto educativo sin ánimo de lucro, creado para practicar las tablas de multiplicar. Pokémon es una marca
+        registrada de The Pokémon Company, Nintendo, Game Freak y Creatures Inc.; los nombres, personajes e imágenes
+        aquí mostrados les pertenecen. Este juego no está afiliado a ellos ni cuenta con su respaldo, no se vende ni
+        genera ingresos de ningún tipo. Si representas a los titulares de los derechos y deseas que se retire algún
+        contenido, basta con pedirlo.
+      </p>
+    </footer>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>

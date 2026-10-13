@@ -19,8 +19,8 @@ export const DIFFICULTIES: Record<DifficultyId, DifficultyConfig> = {
   normal: {
     id: 'normal',
     hearts: 5,
-    multiplicandDigits: [2],
-    multiplierDigits: [1, 2],
+    multiplicandDigits: [1,2],
+    multiplierDigits: [1],
     dividendDigits: [2, 3],
     divisorDigits: [1, 2],
     timeFloor: 10,
@@ -28,7 +28,7 @@ export const DIFFICULTIES: Record<DifficultyId, DifficultyConfig> = {
   dificil: {
     id: 'dificil',
     hearts: 7,
-    multiplicandDigits: [2, 3, 4, 5],
+    multiplicandDigits: [2, 3],
     multiplierDigits: [1, 2],
     dividendDigits: [2, 3, 4],
     divisorDigits: [2, 3],

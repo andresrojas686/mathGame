@@ -19,15 +19,9 @@ describe('quotientRange', () => {
 });
 
 describe('generateDivisionProblem', () => {
-  const expectedDigits = {
-    facil: { dividend: [2], divisor: [1] },
-    normal: { dividend: [2, 3], divisor: [1, 2] },
-    dificil: { dividend: [2, 3, 4], divisor: [1, 2, 3] },
-  } as const;
-
   for (const id of DIFFICULTY_IDS) {
     const cfg = DIFFICULTIES[id];
-    const spec = expectedDigits[id];
+    const spec = { dividend: cfg.dividendDigits, divisor: cfg.divisorDigits };
 
     it(`${id}: divisiones exactas con las cifras del nivel, divisor ≥ 2, cociente ≥ 2 (2000 muestras)`, () => {
       const rng = seededRng(99);
@@ -57,8 +51,9 @@ describe('generateDivisionProblem', () => {
       const p = generateDivisionProblem(cfg, undefined, rng);
       seen.add(`${digitsOf(p.operands[0]!)}/${digitsOf(p.operands[1]!)}`);
     }
-    // 2/1, 2/2, 3/1, 3/2, 3/3, 4/1, 4/2, 4/3 → 8 combinaciones válidas (divisor ≤ dividendo)
-    expect([...seen].sort()).toEqual(['2/1', '2/2', '3/1', '3/2', '3/3', '4/1', '4/2', '4/3']);
+    // Todas las combinaciones de la configuración con divisor ≤ dividendo.
+    const expected = cfg.dividendDigits.flatMap((d) => cfg.divisorDigits.filter((v) => v <= d).map((v) => `${d}/${v}`));
+    expect([...seen].sort()).toEqual(expected.sort());
   });
 
   it('nunca produce 2 cifras entre 3 cifras en difícil', () => {

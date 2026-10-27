@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { DIFFICULTIES, DIFFICULTY_IDS, monsterHpForWave, timeLimitForWave } from '../config/difficulties';
+import { DIFFICULTIES, DIFFICULTY_IDS, INITIAL_TIME, monsterHpForWave, TIME_STEP_PER_WAVE, timeLimitForWave } from '../config/difficulties';
 import { BattleState, summarizeFailures } from './BattleState';
 import { seededRng } from './testRng';
 import type { DifficultyId, HistoryEntry, Problem } from '../types';
@@ -203,18 +203,20 @@ describe('BattleState: tiempo', () => {
 
 describe('timeLimitForWave', () => {
   const cfg = { ...DIFFICULTIES.facil, timeFloor: 5 };
-  it('sigue la tabla del plan: 7.0, 6.5, 6.0 ... hasta el piso', () => {
-    expect(timeLimitForWave(1, cfg)).toBe(7);
-    expect(timeLimitForWave(2, cfg)).toBe(6.5);
-    expect(timeLimitForWave(3, cfg)).toBe(6);
-    expect(timeLimitForWave(5, cfg)).toBe(5);
-    expect(timeLimitForWave(6, cfg)).toBe(5);
-    expect(timeLimitForWave(50, cfg)).toBe(5);
+  // Oleada en la que el descenso alcanza el piso de 5 s.
+  const floorWave = 1 + (INITIAL_TIME - 5) / TIME_STEP_PER_WAVE;
+  it('empieza en INITIAL_TIME y baja TIME_STEP_PER_WAVE por oleada hasta el piso', () => {
+    expect(timeLimitForWave(1, cfg)).toBe(INITIAL_TIME);
+    expect(timeLimitForWave(2, cfg)).toBe(INITIAL_TIME - TIME_STEP_PER_WAVE);
+    expect(timeLimitForWave(3, cfg)).toBe(INITIAL_TIME - 2 * TIME_STEP_PER_WAVE);
+    expect(timeLimitForWave(floorWave, cfg)).toBe(5);
+    expect(timeLimitForWave(floorWave + 1, cfg)).toBe(5);
+    expect(timeLimitForWave(500, cfg)).toBe(5);
   });
   it('si el piso supera el tiempo inicial, el tiempo queda fijo en el piso', () => {
-    const high = { ...cfg, timeFloor: 15 };
-    expect(timeLimitForWave(1, high)).toBe(15);
-    expect(timeLimitForWave(9, high)).toBe(15);
+    const high = { ...cfg, timeFloor: INITIAL_TIME + 5 };
+    expect(timeLimitForWave(1, high)).toBe(INITIAL_TIME + 5);
+    expect(timeLimitForWave(9, high)).toBe(INITIAL_TIME + 5);
   });
 });
 

@@ -1,9 +1,9 @@
 import Phaser from 'phaser';
 import { DIFFICULTY_IDS, DIFFICULTY_LABELS } from '../config/difficulties';
-import { OPERATIONS } from '../config/operations';
+import { CLASSIC_OPERATIONS, MODES, OPERATIONS_BY_ID, operationFor, type OperationKind } from '../config/operations';
 import { audio } from '../systems/AudioManager';
 import { scores } from '../systems/scores/ScoreService';
-import { boardKey, type DifficultyId, type LeaderboardData, type Operation, type ScoreSource, type SubmitOutcome } from '../types';
+import { boardKey, type ArithOp, type DifficultyId, type LeaderboardData, type Operation, type ScoreSource, type SubmitOutcome } from '../types';
 import { Button } from '../ui/Button';
 import { bindWindowKeys } from '../ui/keys';
 import { addMuteButton } from '../ui/MuteButton';
@@ -24,11 +24,14 @@ const TOP = 230;
 export class LeaderboardScene extends Phaser.Scene {
   private params: LeaderboardParams = {};
   private tab = 0;
-  private operation: Operation = 'multiplicar';
+  private kind: OperationKind = 'clasico';
+  /** Operación base de las pestañas clásico y reto; se conserva al pasar por la mezcla. */
+  private base: ArithOp = 'multiplicar';
   private board: LeaderboardData | null = null;
   private source: ScoreSource = 'server';
   private tabTexts: Phaser.GameObjects.Text[] = [];
   private opTexts: Phaser.GameObjects.Text[] = [];
+  private modeTexts: Phaser.GameObjects.Text[] = [];
   private rows: Phaser.GameObjects.GameObject[] = [];
   private notice!: Phaser.GameObjects.Text;
   private alive = true;
@@ -39,10 +42,13 @@ export class LeaderboardScene extends Phaser.Scene {
 
   init(data: LeaderboardParams): void {
     this.params = data ?? {};
-    this.operation = data?.operation ?? 'multiplicar';
+    const info = OPERATIONS_BY_ID[data?.operation ?? 'multiplicar'];
+    this.kind = info.kind;
+    this.base = info.base ?? 'multiplicar';
     this.tab = Math.max(0, DIFFICULTY_IDS.indexOf(data?.level ?? 'facil'));
     this.tabTexts = [];
     this.opTexts = [];
+    this.modeTexts = [];
     this.rows = [];
     this.board = null;
     this.alive = true;
@@ -53,20 +59,28 @@ export class LeaderboardScene extends Phaser.Scene {
     audio.playMusic('menu');
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => (this.alive = false));
 
-    this.add.text(W / 2, 50, 'Ranking', { fontFamily: UI_FONT, fontSize: '52px', color: COLORS.text }).setOrigin(0.5);
-    this.notice = this.add.text(W / 2, 96, '', { fontFamily: UI_FONT, fontSize: '18px', color: COLORS.danger }).setOrigin(0.5);
+    this.add.text(W / 2, 40, 'Ranking', { fontFamily: UI_FONT, fontSize: '46px', color: COLORS.text }).setOrigin(0.5);
+    this.notice = this.add.text(W / 2, 80, '', { fontFamily: UI_FONT, fontSize: '18px', color: COLORS.danger }).setOrigin(0.5);
 
-    OPERATIONS.forEach((op, i) => {
+    MODES.forEach((mode, i) => {
       const t = this.add
-        .text(W / 2 + (i - (OPERATIONS.length - 1) / 2) * 240, 135, `${op.symbol} ${op.label}`, { fontFamily: UI_FONT, fontSize: '24px', color: COLORS.muted })
+        .text(W / 2 + (i - (MODES.length - 1) / 2) * 260, 114, mode.label, { fontFamily: UI_FONT, fontSize: '24px', color: COLORS.muted })
         .setOrigin(0.5)
         .setInteractive({ useHandCursor: true })
-        .on('pointerdown', () => this.setOperation(op.id));
+        .on('pointerdown', () => this.setKind(mode.id));
+      this.modeTexts.push(t);
+    });
+    CLASSIC_OPERATIONS.forEach((op, i) => {
+      const t = this.add
+        .text(W / 2 + (i - (CLASSIC_OPERATIONS.length - 1) / 2) * 240, 152, `${op.symbol} ${op.label}`, { fontFamily: UI_FONT, fontSize: '22px', color: COLORS.muted })
+        .setOrigin(0.5)
+        .setInteractive({ useHandCursor: true })
+        .on('pointerdown', () => this.setBase(op.base!));
       this.opTexts.push(t);
     });
     DIFFICULTY_IDS.forEach((id, i) => {
       const t = this.add
-        .text(W / 2 + (i - 1) * 220, 180, DIFFICULTY_LABELS[id].title, { fontFamily: UI_FONT, fontSize: '28px', color: COLORS.muted })
+        .text(W / 2 + (i - 1) * 220, 192, DIFFICULTY_LABELS[id].title, { fontFamily: UI_FONT, fontSize: '26px', color: COLORS.muted })
         .setOrigin(0.5)
         .setInteractive({ useHandCursor: true })
         .on('pointerdown', () => this.setTab(i));
@@ -82,7 +96,7 @@ export class LeaderboardScene extends Phaser.Scene {
     new Button(this, W / 2 - 180, H - 56, canPlay ? 'Elegir nivel' : 'Jugar', play, { height: 56 }).setFocused(true);
     new Button(this, W / 2 + 180, H - 56, 'Menú', menu, { height: 56 });
     this.add
-      .text(W / 2, H - 16, '← → nivel · M / D / S / R operación · Enter jugar · Escape menú', { fontFamily: UI_FONT, fontSize: '15px', color: COLORS.muted })
+      .text(W / 2, H - 16, '↑ ↓ modo · ← → nivel · M / D / S / R operación · Enter jugar · Escape menú', { fontFamily: UI_FONT, fontSize: '15px', color: COLORS.muted })
       .setOrigin(0.5, 1);
     addMuteButton(this);
 
@@ -91,7 +105,10 @@ export class LeaderboardScene extends Phaser.Scene {
       const k = e.key.toLowerCase();
       if (e.key === 'ArrowLeft') this.setTab((this.tab + 2) % 3);
       else if (e.key === 'ArrowRight') this.setTab((this.tab + 1) % 3);
-      else if (OPERATIONS.some((op) => op.key === k)) this.setOperation(OPERATIONS.find((op) => op.key === k)!.id);
+      else if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+        const i = MODES.findIndex((m) => m.id === this.kind);
+        this.setKind(MODES[(i + (e.key === 'ArrowDown' ? 1 : MODES.length - 1)) % MODES.length]!.id);
+      } else if (CLASSIC_OPERATIONS.some((op) => op.key === k)) this.setBase(CLASSIC_OPERATIONS.find((op) => op.key === k)!.base!);
       else if (e.key === 'Enter') play();
       else if (e.key === 'Escape') menu();
     });
@@ -116,17 +133,35 @@ export class LeaderboardScene extends Phaser.Scene {
     this.renderRows();
   }
 
-  private setOperation(op: Operation): void {
-    this.operation = op;
+  private get operation(): Operation {
+    return operationFor(this.kind, this.base);
+  }
+
+  private setKind(kind: OperationKind): void {
+    this.kind = kind;
+    this.renderTabs();
+    this.renderRows();
+  }
+
+  /** Elegir una operación desde la mezcla vuelve al modo clásico: la mezcla no tiene operación base. */
+  private setBase(base: ArithOp): void {
+    this.base = base;
+    if (this.kind === 'mezcla') this.kind = 'clasico';
     this.renderTabs();
     this.renderRows();
   }
 
   private renderTabs(): void {
     this.tabTexts.forEach((t, i) => t.setColor(i === this.tab ? COLORS.accentText : COLORS.muted).setFontStyle(i === this.tab ? 'bold' : 'normal'));
-    this.opTexts.forEach((t, i) => {
-      const active = OPERATIONS[i]?.id === this.operation;
+    this.modeTexts.forEach((t, i) => {
+      const active = MODES[i]?.id === this.kind;
       t.setColor(active ? COLORS.accentText : COLORS.muted).setFontStyle(active ? 'bold' : 'normal');
+    });
+    // La mezcla no tiene operación base: su fila se oculta.
+    const mixed = this.kind === 'mezcla';
+    this.opTexts.forEach((t, i) => {
+      const active = CLASSIC_OPERATIONS[i]?.base === this.base;
+      t.setVisible(!mixed).setColor(active ? COLORS.accentText : COLORS.muted).setFontStyle(active ? 'bold' : 'normal');
     });
   }
 

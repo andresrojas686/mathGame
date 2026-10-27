@@ -26,7 +26,7 @@ describe('parseScoreInput', () => {
   it('acepta un cuerpo válido', () => {
     expect(parseScoreInput(ok)).toEqual(ok);
   });
-  it.each(['sumar', 'restar'])('acepta la operación %s', (operation) => {
+  it.each(['sumar', 'restar', 'mezcla', 'reto-sumar', 'reto-dividir'])('acepta la operación %s', (operation) => {
     expect(parseScoreInput({ ...ok, operation }).operation).toBe(operation);
   });
   it('operation por defecto es multiplicar', () => {
@@ -36,6 +36,7 @@ describe('parseScoreInput', () => {
   it.each([
     ['level inválido', { ...ok, level: 'extremo' }],
     ['operation inválida', { ...ok, operation: 'potencia' }],
+    ['reto de mezcla', { ...ok, operation: 'reto-mezcla' }],
     ['correct negativo', { ...ok, correct: -1 }],
     ['correct decimal', { ...ok, correct: 1.5 }],
     ['correct texto', { ...ok, correct: '12' }],

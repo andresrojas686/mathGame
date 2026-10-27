@@ -1,5 +1,15 @@
 export const LEVELS = ['facil', 'normal', 'dificil'] as const;
-export const OPERATIONS = ['multiplicar', 'dividir', 'sumar', 'restar'] as const;
+export const OPERATIONS = [
+  'multiplicar',
+  'dividir',
+  'sumar',
+  'restar',
+  'mezcla',
+  'reto-multiplicar',
+  'reto-dividir',
+  'reto-sumar',
+  'reto-restar',
+] as const;
 
 export type Level = (typeof LEVELS)[number];
 export type Operation = (typeof OPERATIONS)[number];

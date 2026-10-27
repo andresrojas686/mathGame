@@ -162,7 +162,7 @@ describe('BattleState: tiempo', () => {
     const s = newState('normal');
     const lost = s.problem;
     const r = timeout(s);
-    expect(r).toEqual({ type: 'hit', lost });
+    expect(r).toEqual({ type: 'hit', lost, restart: false });
     expect(s.hearts).toBe(DIFFICULTIES.normal.hearts - 1);
     expect(s.problem).not.toBe(lost);
     expect(s.timeLeft).toBe(s.timeLimit);
@@ -221,7 +221,7 @@ describe('timeLimitForWave', () => {
 });
 
 describe('summarizeFailures', () => {
-  const p = (a: number, b: number): Problem => ({ text: `${a} × ${b}`, answer: a * b, operands: [a, b] });
+  const p = (a: number, b: number): Problem => ({ text: `${a} × ${b}`, answer: a * b, operands: [a, b], op: 'multiplicar' });
   const entry = (problem: Problem, given: number | null, correct = false): HistoryEntry => ({ problem, given, correct, timeUsed: 1 });
 
   it('devuelve solo las operaciones con algún fallo, agrupadas', () => {

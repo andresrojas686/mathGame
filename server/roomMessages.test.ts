@@ -8,8 +8,8 @@ describe('parseClientMessage', () => {
     expect(msg).toEqual({ type: 'create', name: 'Ana María', trainer: 'misty', level: 'dificil', operation: 'dividir' });
   });
 
-  it('acepta salas de suma y de resta', () => {
-    for (const operation of ['sumar', 'restar']) {
+  it('acepta salas de suma, resta, mezcla y reto memoria', () => {
+    for (const operation of ['sumar', 'restar', 'mezcla', 'reto-restar']) {
       expect(parseClientMessage({ type: 'create', name: 'Ana', trainer: 'misty', level: 'normal', operation })).toMatchObject({ operation });
     }
   });

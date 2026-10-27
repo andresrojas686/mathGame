@@ -1,4 +1,6 @@
-import type { DifficultyConfig, Operation, Problem, Rng } from '../types';
+import { CLASSIC_OPS, OPERATIONS_BY_ID } from '../config/operations';
+import { retoConfig } from '../config/reto';
+import type { ArithOp, DifficultyConfig, Operation, Problem, Rng } from '../types';
 
 /** Entero uniforme en [min, max], ambos incluidos. */
 export function randomInt(min: number, max: number, rng: Rng): number {
@@ -10,9 +12,12 @@ export function randomInt(min: number, max: number, rng: Rng): number {
  * Para 1 cifra el mínimo es 2, porque 0 y 1 no enseñan nada y regalan el turno.
  */
 export function randomWithDigits(digits: number, rng: Rng): number {
-  const min = digits === 1 ? 2 : 10 ** (digits - 1);
-  const max = 10 ** digits - 1;
-  return randomInt(min, max, rng);
+  return randomInt(minWithDigits(digits), 10 ** digits - 1, rng);
+}
+
+/** El menor número que usa `randomWithDigits` para esas cifras. */
+export function minWithDigits(digits: number): number {
+  return digits === 1 ? 2 : 10 ** (digits - 1);
 }
 
 export function pick<T>(items: readonly T[], rng: Rng): T {
@@ -23,13 +28,13 @@ export function pick<T>(items: readonly T[], rng: Rng): T {
 
 export function sameProblem(a: Problem | undefined, b: Problem): boolean {
   if (!a) return false;
-  return a.operands.length === b.operands.length && a.operands.every((v, i) => v === b.operands[i]);
+  return a.op === b.op && a.operands.length === b.operands.length && a.operands.every((v, i) => v === b.operands[i]);
 }
 
 function buildProblem(cfg: DifficultyConfig, rng: Rng): Problem {
   const a = randomWithDigits(pick(cfg.multiplicandDigits, rng), rng);
   const b = randomWithDigits(pick(cfg.multiplierDigits, rng), rng);
-  return { text: `${a} × ${b}`, answer: a * b, operands: [a, b] };
+  return { text: `${a} × ${b}`, answer: a * b, operands: [a, b], op: 'multiplicar' };
 }
 
 function withoutRepeat(build: () => Problem, previous: Problem | undefined): Problem {
@@ -69,13 +74,13 @@ function buildDivision(cfg: DifficultyConfig, rng: Rng): Problem {
     const range = quotientRange(b, dividendDigits);
     if (!range) continue;
     const q = randomInt(range.min, range.max, rng);
-    return { text: `${q * b} ÷ ${b}`, answer: q, operands: [q * b, b] };
+    return { text: `${q * b} ÷ ${b}`, answer: q, operands: [q * b, b], op: 'dividir' };
   }
   // Último recurso, siempre válido: el divisor mínimo de esas cifras.
   const b = divisorDigits === 1 ? 2 : 10 ** (divisorDigits - 1);
   const range = quotientRange(b, dividendDigits) ?? { min: 2, max: 2 };
   const q = randomInt(range.min, range.max, rng);
-  return { text: `${q * b} ÷ ${b}`, answer: q, operands: [q * b, b] };
+  return { text: `${q * b} ÷ ${b}`, answer: q, operands: [q * b, b], op: 'dividir' };
 }
 
 /**
@@ -89,7 +94,7 @@ export function generateDivisionProblem(cfg: DifficultyConfig, previous?: Proble
 function buildAddition(cfg: DifficultyConfig, rng: Rng): Problem {
   const a = randomWithDigits(pick(cfg.addendDigits, rng), rng);
   const b = randomWithDigits(pick(cfg.addendDigits, rng), rng);
-  return { text: `${a} + ${b}`, answer: a + b, operands: [a, b] };
+  return { text: `${a} + ${b}`, answer: a + b, operands: [a, b], op: 'sumar' };
 }
 
 /**
@@ -102,23 +107,32 @@ export function generateAdditionProblem(cfg: DifficultyConfig, previous?: Proble
 
 function buildSubtraction(cfg: DifficultyConfig, rng: Rng): Problem {
   const minuendDigits = pick(cfg.minuendDigits, rng);
-  // El sustraendo siempre tiene menos cifras que el minuendo: el resultado nunca es negativo ni cero.
-  const allowed = cfg.subtrahendDigits.filter((d) => d < minuendDigits);
+  // El sustraendo nunca tiene más cifras que el minuendo. Si tiene las mismas, se sortea
+  // por debajo del minuendo: el resultado nunca es negativo ni cero.
+  const allowed = cfg.subtrahendDigits.filter((d) => d <= minuendDigits);
   const subtrahendDigits = pick(allowed.length ? allowed : [Math.max(1, minuendDigits - 1)], rng);
-  const a = randomWithDigits(minuendDigits, rng);
-  const b = randomWithDigits(subtrahendDigits, rng);
-  return { text: `${a} − ${b}`, answer: a - b, operands: [a, b] };
+  let a: number;
+  let b: number;
+  if (subtrahendDigits === minuendDigits) {
+    const min = minWithDigits(minuendDigits);
+    a = randomInt(min + 1, 10 ** minuendDigits - 1, rng);
+    b = randomInt(min, a - 1, rng);
+  } else {
+    a = randomWithDigits(minuendDigits, rng);
+    b = randomWithDigits(subtrahendDigits, rng);
+  }
+  return { text: `${a} − ${b}`, answer: a - b, operands: [a, b], op: 'restar' };
 }
 
 /**
  * Genera una resta para el nivel: minuendo de `minuendDigits` cifras menos sustraendo de
- * `subtrahendDigits` cifras, con respuesta ≥ 1. Nunca repite la operación anterior.
+ * `subtrahendDigits` cifras (nunca más), con respuesta ≥ 1. Nunca repite la operación anterior.
  */
 export function generateSubtractionProblem(cfg: DifficultyConfig, previous?: Problem, rng: Rng = Math.random): Problem {
   return withoutRepeat(() => buildSubtraction(cfg, rng), previous);
 }
 
-export function generateProblemFor(operation: Operation, cfg: DifficultyConfig, previous?: Problem, rng: Rng = Math.random): Problem {
+function generateArith(operation: ArithOp, cfg: DifficultyConfig, previous: Problem | undefined, rng: Rng): Problem {
   switch (operation) {
     case 'dividir':
       return generateDivisionProblem(cfg, previous, rng);
@@ -129,4 +143,18 @@ export function generateProblemFor(operation: Operation, cfg: DifficultyConfig, 
     case 'multiplicar':
       return generateProblem(cfg, previous, rng);
   }
+}
+
+/**
+ * Genera la siguiente operación de la partida:
+ *  - operación clásica: la del nivel;
+ *  - mezcla: sortea una de las cuatro y usa las cifras del nivel para esa operación;
+ *  - reto memoria: la operación base con las cifras del reto (src/config/reto.ts).
+ * Todo sale del mismo `rng`, así que una semilla compartida da la misma secuencia a toda la sala.
+ */
+export function generateProblemFor(operation: Operation, cfg: DifficultyConfig, previous?: Problem, rng: Rng = Math.random): Problem {
+  const info = OPERATIONS_BY_ID[operation];
+  if (info.kind === 'mezcla') return generateArith(pick(CLASSIC_OPS, rng), cfg, previous, rng);
+  if (info.kind === 'reto') return generateArith(info.base!, retoConfig(cfg.id), previous, rng);
+  return generateArith(info.base!, cfg, previous, rng);
 }

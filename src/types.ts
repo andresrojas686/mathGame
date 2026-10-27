@@ -1,7 +1,13 @@
 export type DifficultyId = 'facil' | 'normal' | 'dificil';
 
-/** Operación de la partida. Cada una tiene sus propias tablas de ranking. */
-export type Operation = 'multiplicar' | 'dividir' | 'sumar' | 'restar';
+/** Las cuatro operaciones aritméticas: las que saben construir los generadores. */
+export type ArithOp = 'multiplicar' | 'dividir' | 'sumar' | 'restar';
+
+/**
+ * Lo que se elige para jugar, y la clave de su ranking: una operación clásica, la mezcla
+ * de las cuatro, o el reto de memoria sobre una de ellas. Cada una tiene sus propias tablas.
+ */
+export type Operation = ArithOp | 'mezcla' | `reto-${ArithOp}`;
 
 export interface DifficultyConfig {
   id: DifficultyId;
@@ -29,6 +35,8 @@ export interface Problem {
   text: string;
   answer: number;
   operands: number[];
+  /** Operación aritmética de este problema; en la mezcla cambia en cada turno. */
+  op: ArithOp;
 }
 
 export interface HistoryEntry {

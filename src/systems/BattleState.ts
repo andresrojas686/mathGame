@@ -1,14 +1,22 @@
 import type { DifficultyConfig, FailureSummary, HistoryEntry, Operation, Problem, Rng } from '../types';
 import { monsterHpForWave, timeLimitForWave } from '../config/difficulties';
 import { OPERATIONS_BY_ID } from '../config/operations';
+import { RETO_BACK, RETO_MEMORIZE_TIME, RETO_TIME } from '../config/reto';
 import { generateProblemFor } from './ProblemGenerator';
 
 export type SubmitResult = 'correct' | 'defeated' | 'miss' | 'ignored';
 
 export type TickResult =
   | { type: 'running' }
-  | { type: 'hit'; lost: Problem }
+  /** Reto memoria: calentamiento en curso, sin reloj de respuesta. */
+  | { type: 'memorize' }
+  /** Reto memoria: apareció una operación nueva del calentamiento o la primera a responder. */
+  | { type: 'shown' }
+  /** `restart`: en el reto, la cadena vuelve a empezar con un calentamiento nuevo. */
+  | { type: 'hit'; lost: Problem; restart: boolean }
   | { type: 'gameover'; lost: Problem };
+
+export type BattlePhase = 'memorize' | 'answer';
 
 /**
  * Máquina de estado del bucle de combate (plan.md §3). No importa nada de Phaser.
@@ -18,11 +26,19 @@ export type TickResult =
  *  - Respuesta incorrecta → nada cambia salvo el historial; se puede reintentar.
  *  - Se acaba el tiempo   → −1 corazón, nueva operación, temporizador se reinicia.
  *  - Corazones = 0        → fin de partida. Es la única salida del bucle.
+ *
+ * Reto memoria (plan.md §4): se responde el resultado de la operación vista `back` pasos antes.
+ *  - Calentamiento: `back` operaciones de RETO_MEMORIZE_TIME s cada una, sin reloj ni respuestas.
+ *  - Después cada acierto muestra una operación nueva y pide la siguiente de la cadena.
+ *  - Se acaba el tiempo → −1 corazón y la cadena empieza de nuevo con otro calentamiento.
+ *  - El tiempo para responder es siempre RETO_TIME.
  */
 export class BattleState {
   readonly cfg: DifficultyConfig;
   readonly operation: Operation;
   readonly history: HistoryEntry[] = [];
+  /** Reto memoria: cuántas operaciones hacia atrás se responden; 0 en los demás modos. */
+  readonly back: number;
 
   hearts: number;
   correct = 0;
@@ -32,23 +48,46 @@ export class BattleState {
   wavesCleared = 0;
   monsterHp: number;
   monsterMaxHp: number;
+  /** Operación que se ve en pantalla. */
   problem: Problem;
   timeLimit: number;
   timeLeft: number;
   over = false;
+  /** Fuera del reto siempre es 'answer'. */
+  phase: BattlePhase = 'answer';
+  /** Reto memoria: segundos que le quedan en pantalla a la operación del calentamiento. */
+  memorizeLeft = 0;
 
   private readonly rng: Rng;
+  /** Reto memoria: operaciones vistas que aún no se han respondido, la más antigua primero. */
+  private shown: Problem[] = [];
 
   constructor(cfg: DifficultyConfig, operation: Operation = 'multiplicar', rng: Rng = Math.random) {
     this.cfg = cfg;
     this.operation = operation;
     this.rng = rng;
+    this.back = OPERATIONS_BY_ID[operation].kind === 'reto' ? RETO_BACK[cfg.id] : 0;
     this.hearts = cfg.hearts;
     this.monsterMaxHp = monsterHpForWave(this.wave);
     this.monsterHp = this.monsterMaxHp;
     this.problem = generateProblemFor(operation, cfg, undefined, rng);
     this.timeLimit = this.nextTimeLimit();
     this.timeLeft = this.timeLimit;
+    if (this.isReto) this.startChain(this.problem);
+  }
+
+  get isReto(): boolean {
+    return this.back > 0;
+  }
+
+  /** Operación cuyo resultado se pide: la de pantalla, o en el reto la de `back` pasos atrás. */
+  get target(): Problem {
+    return this.isReto ? this.shown[0]! : this.problem;
+  }
+
+  /** Reto memoria: posición (1-based) de la operación actual dentro del calentamiento. */
+  get memorizeStep(): number {
+    return this.shown.length;
   }
 
   /** Segundos usados en la operación actual. */
@@ -57,14 +96,17 @@ export class BattleState {
   }
 
   nextTimeLimit(): number {
-    // En división el tiempo es el doble, incluido el piso (plan.md §4).
-    return timeLimitForWave(this.wave, this.cfg) * OPERATIONS_BY_ID[this.operation].timeFactor;
+    if (this.isReto) return RETO_TIME;
+    // En división el tiempo es el doble, incluido el piso (plan.md §4). En la mezcla
+    // manda la operación que salió en este turno.
+    return timeLimitForWave(this.wave, this.cfg) * OPERATIONS_BY_ID[this.problem.op].timeFactor;
   }
 
   submit(answer: number): SubmitResult {
-    if (this.over) return 'ignored';
-    const isCorrect = answer === this.problem.answer;
-    this.history.push({ problem: this.problem, given: answer, correct: isCorrect, timeUsed: this.timeUsed });
+    if (this.over || this.phase === 'memorize') return 'ignored';
+    const target = this.target;
+    const isCorrect = answer === target.answer;
+    this.history.push({ problem: target, given: answer, correct: isCorrect, timeUsed: this.timeUsed });
     if (!isCorrect) return 'miss';
 
     this.correct += 1;
@@ -76,6 +118,7 @@ export class BattleState {
       this.monsterMaxHp = monsterHpForWave(this.wave);
       this.monsterHp = this.monsterMaxHp;
     }
+    if (this.isReto) this.shown.shift();
     this.advance();
     return defeated ? 'defeated' : 'correct';
   }
@@ -83,10 +126,11 @@ export class BattleState {
   /** Descuenta `dtSeconds` del temporizador y resuelve el ataque del monstruo si llega a cero. */
   tick(dtSeconds: number): TickResult {
     if (this.over) return { type: 'running' };
+    if (this.phase === 'memorize') return this.tickMemorize(dtSeconds);
     this.timeLeft = Math.max(0, this.timeLeft - dtSeconds);
     if (this.timeLeft > 0) return { type: 'running' };
 
-    const lost = this.problem;
+    const lost = this.target;
     this.history.push({ problem: lost, given: null, correct: false, timeUsed: this.timeLimit });
     this.hearts -= 1;
 
@@ -96,12 +140,36 @@ export class BattleState {
       return { type: 'gameover', lost };
     }
 
+    if (this.isReto) {
+      // Perdido el hilo, no se puede saber qué tocaba: la cadena empieza de nuevo.
+      this.shown = [];
+      this.advance();
+      this.startChain(this.problem);
+      return { type: 'hit', lost, restart: true };
+    }
     this.advance();
-    return { type: 'hit', lost };
+    return { type: 'hit', lost, restart: false };
+  }
+
+  private tickMemorize(dtSeconds: number): TickResult {
+    this.memorizeLeft = Math.max(0, this.memorizeLeft - dtSeconds);
+    if (this.memorizeLeft > 0) return { type: 'memorize' };
+    this.advance();
+    if (this.shown.length > this.back) this.phase = 'answer';
+    else this.memorizeLeft = RETO_MEMORIZE_TIME;
+    return { type: 'shown' };
+  }
+
+  /** Reto memoria: arranca un calentamiento con `first` como primera operación. */
+  private startChain(first: Problem): void {
+    this.shown = [first];
+    this.phase = 'memorize';
+    this.memorizeLeft = RETO_MEMORIZE_TIME;
   }
 
   private advance(): void {
     this.problem = generateProblemFor(this.operation, this.cfg, this.problem, this.rng);
+    if (this.isReto) this.shown.push(this.problem);
     this.timeLimit = this.nextTimeLimit();
     this.timeLeft = this.timeLimit;
   }

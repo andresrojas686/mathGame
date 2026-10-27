@@ -131,6 +131,36 @@ Las dos se añaden junto a multiplicar y dividir en la pantalla de nivel (teclas
 - **Ranking separado**, como las otras operaciones: 12 tablas en total. Un `scores.json` anterior carga sin cambios y las tablas nuevas aparecen vacías.
 - La configuración vive en `addendDigits`, `minuendDigits` y `subtrahendDigits` de cada `DifficultyConfig`; los generadores son `generateAdditionProblem` y `generateSubtractionProblem`. Etiquetas, símbolos, teclas y factor de tiempo de las cuatro operaciones están en `src/config/operations.ts`.
 
+### Modos: Mezcla y Reto memoria (fase 9)
+
+En la pantalla de nivel se elige primero el **modo** (↑ ↓): Clásico, Mezcla o Reto memoria. Cada combinación de modo, operación y nivel tiene su propia tabla de ranking y se puede jugar en sala.
+
+Internamente cada modo es un valor más de `Operation` (`'mezcla'`, `'reto-sumar'`, …), así que ranking, salas, preferencias y `?op=` funcionan igual que con las operaciones clásicas. En total hay 9 × 3 = 27 tablas.
+
+**Mezcla.** En cada turno se sortea una de las cuatro operaciones. Cada una usa las cifras de su nivel y su propio tiempo (la división, el doble), y el tiempo baja con las oleadas como en el modo clásico.
+
+**Reto memoria.** Se elige una operación y hay que escribir el resultado de la operación que se vio **N pasos antes**: N = 1 en fácil, 2 en normal y 3 en difícil. En pantalla solo se ve la operación actual.
+
+- **Calentamiento:** al empezar se muestran N operaciones, 3 s cada una, sin reloj y sin poder responder.
+- Luego cada operación nueva pide el resultado de la que se vio N pasos antes. Con cada acierto aparece otra y la cadena avanza.
+- **7 s fijos** para responder; el tiempo no baja con las oleadas.
+- **Respuesta incorrecta:** se puede reintentar mientras quede tiempo.
+- **Se acaba el tiempo:** −1 corazón, se muestra la operación que tocaba con su resultado y el aviso "¡Perdiste un corazón! La cadena empieza de nuevo". Después hay un calentamiento nuevo.
+- **Cifras iguales en los tres niveles:** suma y resta de 1 o 2 cifras (la resta nunca da negativo ni cero), multiplicación de 1 o 2 cifras × 1 cifra, división exacta de hasta 2 cifras ÷ 1 cifra.
+
+Ejemplo con suma:
+
+| Paso | Fácil (N = 1) | Normal (N = 2) | Difícil (N = 3) |
+|---|---|---|---|
+| 1 | 2 + 2 (memoriza) | 2 + 2 (memoriza) | 2 + 2 (memoriza) |
+| 2 | 3 + 3 → escribe **4** | 3 + 3 (memoriza) | 3 + 3 (memoriza) |
+| 3 | 5 + 1 → escribe **6** | 5 + 1 → escribe **4** | 5 + 1 (memoriza) |
+| 4 | 7 + 4 → escribe **6** | 7 + 4 → escribe **6** | 7 + 4 → escribe **4** |
+
+En sala la secuencia de operaciones es la misma para todos aunque cada uno reinicie la cadena en momentos distintos: cada operación nueva sale del mismo flujo de la semilla compartida.
+
+La configuración está en `src/config/reto.ts` (`RETO_TIME`, `RETO_MEMORIZE_TIME`, `RETO_BACK`, `retoConfig`) y la lógica en `BattleState` (`phase`, `target`, `back`).
+
 ### Generador de operaciones
 
 ```ts
@@ -733,6 +763,9 @@ Decisiones que vale la pena recordar:
 
 ### Fase 8 — Sumas y restas ✔
 Dos operaciones nuevas con tres niveles cada una, su propio ranking y disponibles en salas (sección 4). Las cuatro operaciones se describen en un solo sitio, `src/config/operations.ts`, que usan la pantalla de nivel, el ranking, el combate y los resultados.
+
+### Fase 9 — Modos Mezcla y Reto memoria ✔
+Dos modos más, con ranking propio y disponibles en salas (sección 4). La Mezcla sortea una operación distinta en cada turno. El Reto memoria pide el resultado de la operación vista 1, 2 o 3 pasos antes, con calentamiento inicial, 7 s fijos y reinicio de la cadena al perder un corazón. La pantalla de nivel y el ranking tienen una fila de modo encima de las operaciones.
 
 ---
 

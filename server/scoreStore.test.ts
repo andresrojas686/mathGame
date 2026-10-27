@@ -47,7 +47,7 @@ describe('ScoreStore', () => {
   it('empieza vacío si el archivo no existe y crea el directorio al guardar', async () => {
     const store = new ScoreStore(file);
     const data = await store.leaderboard();
-    expect(Object.keys(data.boards)).toHaveLength(12);
+    expect(Object.keys(data.boards)).toHaveLength(27);
     expect(data.boards['multiplicar:facil']).toEqual([]);
 
     const r = await store.submit(input(), new Date('2026-09-10T10:00:00Z'));

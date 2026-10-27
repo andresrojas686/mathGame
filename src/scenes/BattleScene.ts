@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { DIFFICULTIES, DIFFICULTY_LABELS, isDifficultyId } from '../config/difficulties';
 import { OPERATIONS_BY_ID } from '../config/operations';
+import { RETO_MEMORIZE_TIME } from '../config/reto';
 import { THEMES, type Theme } from '../config/themes';
 import { DEFAULT_TRAINER_ID } from '../config/trainers';
 import { audio } from '../systems/AudioManager';
@@ -32,6 +33,8 @@ export interface OnlineBattleInfo {
 /** Máximo de cifras de un resultado: 99999 × 999 = 99 899 001 → 8 cifras. Una de margen. */
 const MAX_ANSWER_DIGITS = 9;
 const REVEAL_MS = 500;
+/** Reto memoria: lo que dura el aviso de que la cadena vuelve a empezar. */
+const RETO_RESTART_MS = 2200;
 const MAX_TICK_MS = 100;
 const GAME_OVER_DELAY_MS = 1600;
 const LOW_TIME_S = 2;
@@ -63,6 +66,8 @@ export class BattleScene extends Phaser.Scene {
   private waveText!: Phaser.GameObjects.Text;
   private problemText!: Phaser.GameObjects.Text;
   private timerFill!: Phaser.GameObjects.Rectangle;
+  /** Reto memoria: indica si hay que memorizar o qué resultado se pide. */
+  private hintText!: Phaser.GameObjects.Text;
   private timerWidth = 600;
   private answerText!: Phaser.GameObjects.Text;
   private answerGroup!: Phaser.GameObjects.Container;
@@ -135,7 +140,8 @@ export class BattleScene extends Phaser.Scene {
     this.renderTimer(time);
     audio.setTension(this.state.hearts === 1 || this.state.timeLeft < LOW_TIME_S);
 
-    if (result.type === 'hit') this.onMonsterAttack(result.lost);
+    if (result.type === 'shown') this.renderProblem();
+    else if (result.type === 'hit') this.onMonsterAttack(result.lost, result.restart);
     else if (result.type === 'gameover') this.onGameOver(result.lost);
   }
 
@@ -233,6 +239,8 @@ export class BattleScene extends Phaser.Scene {
     const y = 372;
     this.add.rectangle(W / 2, y, this.timerWidth, 22, p.bg, 0.8).setStrokeStyle(1, p.secondary, 0.5);
     this.timerFill = this.add.rectangle(W / 2 - this.timerWidth / 2, y, this.timerWidth, 22, p.secondary).setOrigin(0, 0.5);
+    // En la columna de la respuesta, para no meterse bajo el teclado numérico.
+    this.hintText = this.add.text(500, 412, '', { fontFamily: UI_FONT, fontSize: '22px', color: p.text, align: 'center' }).setOrigin(0.5);
   }
 
   private buildAnswer(): void {
@@ -281,7 +289,7 @@ export class BattleScene extends Phaser.Scene {
     const digit = isDigitKey(event);
     if (!digit && event.key !== 'Backspace' && event.key !== 'Enter') return;
     event.preventDefault();
-    if (this.state.over || this.paused || this.revealMsLeft > 0) return;
+    if (!this.acceptsInput()) return;
 
     if (digit) {
       this.numpad.flash(event.key as NumPadKey, this.theme.palette);
@@ -295,8 +303,13 @@ export class BattleScene extends Phaser.Scene {
     }
   }
 
+  /** Fuera de pausa, revelación, calentamiento del reto y fin de partida. */
+  private acceptsInput(): boolean {
+    return !this.state.over && !this.paused && this.revealMsLeft <= 0 && this.state.phase === 'answer';
+  }
+
   private onPadKey(key: NumPadKey): void {
-    if (this.state.over || this.paused || this.revealMsLeft > 0) return;
+    if (!this.acceptsInput()) return;
     if (key === 'back') this.backspace();
     else if (key === 'ok') this.confirm();
     else this.typeDigit(key);
@@ -376,12 +389,17 @@ export class BattleScene extends Phaser.Scene {
     });
   }
 
-  private onMonsterAttack(lost: Problem): void {
+  private onMonsterAttack(lost: Problem, restart: boolean): void {
     audio.playSfx('attack');
     this.input$ = '';
     this.renderAnswer();
     this.renderHud();
     this.showReveal(lost);
+    if (restart) {
+      this.revealMsLeft = RETO_RESTART_MS;
+      this.numpad.setEnabled(false);
+      this.hintText.setText('¡Perdiste un corazón!\nLa cadena empieza de nuevo').setColor(this.theme.palette.danger);
+    }
     this.shake(250, 0.012);
     this.monster.lunge();
     this.hero.hit();
@@ -454,8 +472,18 @@ export class BattleScene extends Phaser.Scene {
   }
 
   private renderProblem(): void {
-    this.problemText.setText(this.state.problem.text).setColor(this.theme.palette.text);
+    const s = this.state;
+    this.problemText.setText(s.problem.text).setColor(this.theme.palette.text);
+    this.hintText.setText(this.hint()).setColor(s.phase === 'memorize' ? this.theme.palette.muted : this.theme.palette.text);
+    if (!s.over) this.numpad.setEnabled(s.phase === 'answer');
     this.renderTimer(0);
+  }
+
+  private hint(): string {
+    const s = this.state;
+    if (!s.isReto) return '';
+    if (s.phase === 'memorize') return `Memoriza… (${s.memorizeStep} de ${s.back})`;
+    return s.back === 1 ? 'Escribe el resultado de la operación anterior' : `Escribe el resultado de hace ${s.back} operaciones`;
   }
 
   private showReveal(lost: Problem): void {
@@ -471,6 +499,12 @@ export class BattleScene extends Phaser.Scene {
 
   private renderTimer(time: number): void {
     const p = this.theme.palette;
+    if (this.state.phase === 'memorize') {
+      // Durante el calentamiento la barra cuenta el tiempo para memorizar, sin alarma.
+      this.timerFill.width = (this.timerWidth * this.state.memorizeLeft) / RETO_MEMORIZE_TIME;
+      this.timerFill.setFillStyle(p.accent).setAlpha(0.6);
+      return;
+    }
     const ratio = this.state.timeLimit > 0 ? this.state.timeLeft / this.state.timeLimit : 0;
     this.timerFill.width = this.timerWidth * ratio;
     const low = this.state.timeLeft < LOW_TIME_S;

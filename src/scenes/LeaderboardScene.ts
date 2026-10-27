@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { DIFFICULTY_IDS, DIFFICULTY_LABELS } from '../config/difficulties';
+import { OPERATIONS } from '../config/operations';
 import { audio } from '../systems/AudioManager';
 import { scores } from '../systems/scores/ScoreService';
 import { boardKey, type DifficultyId, type LeaderboardData, type Operation, type ScoreSource, type SubmitOutcome } from '../types';
@@ -19,10 +20,6 @@ export interface LeaderboardParams {
 
 const ROW_H = 38;
 const TOP = 230;
-const OPERATIONS: { id: Operation; label: string }[] = [
-  { id: 'multiplicar', label: '× Multiplicar' },
-  { id: 'dividir', label: '÷ Dividir' },
-];
 
 export class LeaderboardScene extends Phaser.Scene {
   private params: LeaderboardParams = {};
@@ -61,7 +58,7 @@ export class LeaderboardScene extends Phaser.Scene {
 
     OPERATIONS.forEach((op, i) => {
       const t = this.add
-        .text(W / 2 + (i - 0.5) * 260, 135, op.label, { fontFamily: UI_FONT, fontSize: '24px', color: COLORS.muted })
+        .text(W / 2 + (i - (OPERATIONS.length - 1) / 2) * 240, 135, `${op.symbol} ${op.label}`, { fontFamily: UI_FONT, fontSize: '24px', color: COLORS.muted })
         .setOrigin(0.5)
         .setInteractive({ useHandCursor: true })
         .on('pointerdown', () => this.setOperation(op.id));
@@ -85,7 +82,7 @@ export class LeaderboardScene extends Phaser.Scene {
     new Button(this, W / 2 - 180, H - 56, canPlay ? 'Elegir nivel' : 'Jugar', play, { height: 56 }).setFocused(true);
     new Button(this, W / 2 + 180, H - 56, 'Menú', menu, { height: 56 });
     this.add
-      .text(W / 2, H - 16, '← → nivel · M / D operación · Enter jugar · Escape menú', { fontFamily: UI_FONT, fontSize: '15px', color: COLORS.muted })
+      .text(W / 2, H - 16, '← → nivel · M / D / S / R operación · Enter jugar · Escape menú', { fontFamily: UI_FONT, fontSize: '15px', color: COLORS.muted })
       .setOrigin(0.5, 1);
     addMuteButton(this);
 
@@ -94,8 +91,7 @@ export class LeaderboardScene extends Phaser.Scene {
       const k = e.key.toLowerCase();
       if (e.key === 'ArrowLeft') this.setTab((this.tab + 2) % 3);
       else if (e.key === 'ArrowRight') this.setTab((this.tab + 1) % 3);
-      else if (k === 'm') this.setOperation('multiplicar');
-      else if (k === 'd') this.setOperation('dividir');
+      else if (OPERATIONS.some((op) => op.key === k)) this.setOperation(OPERATIONS.find((op) => op.key === k)!.id);
       else if (e.key === 'Enter') play();
       else if (e.key === 'Escape') menu();
     });

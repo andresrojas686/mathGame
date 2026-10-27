@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { DIFFICULTY_LABELS } from '../config/difficulties';
+import { OPERATIONS_BY_ID } from '../config/operations';
 import { audio } from '../systems/AudioManager';
 import type { RoomView } from '../systems/online/protocol';
 import { roomClient, type RoomEvent } from '../systems/online/RoomClient';
@@ -52,7 +53,7 @@ export class RoomResultScene extends Phaser.Scene {
       this.unsubscribe = null;
     });
 
-    const opLabel = p.operation === 'dividir' ? 'División' : 'Multiplicación';
+    const opLabel = OPERATIONS_BY_ID[p.operation].noun;
     this.add.text(W / 2, 50, `Sala ${p.online.code}`, { fontFamily: UI_FONT, fontSize: '40px', color: COLORS.text }).setOrigin(0.5);
     this.add
       .text(W / 2, 92, `${opLabel} · ${DIFFICULTY_LABELS[p.level].title}`, { fontFamily: UI_FONT, fontSize: '20px', color: COLORS.muted })

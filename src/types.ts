@@ -1,7 +1,7 @@
 export type DifficultyId = 'facil' | 'normal' | 'dificil';
 
-/** Operación de la partida. 'dividir' llega en Fase 4; el ranking ya la contempla. */
-export type Operation = 'multiplicar' | 'dividir';
+/** Operación de la partida. Cada una tiene sus propias tablas de ranking. */
+export type Operation = 'multiplicar' | 'dividir' | 'sumar' | 'restar';
 
 export interface DifficultyConfig {
   id: DifficultyId;
@@ -14,6 +14,12 @@ export interface DifficultyConfig {
   dividendDigits: number[];
   /** División: cifras posibles del divisor, ej. [1, 2]. Nunca más cifras que el dividendo. */
   divisorDigits: number[];
+  /** Suma: cifras posibles de cada sumando, ej. [1, 2]. Se sortean por separado. */
+  addendDigits: number[];
+  /** Resta: cifras posibles del minuendo, ej. [3]. */
+  minuendDigits: number[];
+  /** Resta: cifras posibles del sustraendo. Siempre menos que el minuendo, así nunca da negativo. */
+  subtrahendDigits: number[];
   /** Tiempo mínimo de respuesta en segundos. Es lo que hace posible una partida infinita. */
   timeFloor: number;
 }

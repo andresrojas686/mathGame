@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { DIFFICULTIES, DIFFICULTY_LABELS, isDifficultyId } from '../config/difficulties';
+import { OPERATIONS_BY_ID } from '../config/operations';
 import { THEMES, type Theme } from '../config/themes';
 import { DEFAULT_TRAINER_ID } from '../config/trainers';
 import { audio } from '../systems/AudioManager';
@@ -206,7 +207,7 @@ export class BattleScene extends Phaser.Scene {
     this.heartBar = new HeartBar(this, 56, 48, cfg.hearts, p.accent);
     this.correctText = this.add.text(W - 40, 40, '', { fontFamily: UI_FONT, fontSize: '32px', color: p.text }).setOrigin(1, 0.5);
     this.waveText = this.add.text(W - 40, 74, '', { fontFamily: UI_FONT, fontSize: '20px', color: p.muted }).setOrigin(1, 0.5);
-    const opLabel = this.operation === 'dividir' ? 'División' : 'Multiplicación';
+    const opLabel = OPERATIONS_BY_ID[this.operation].noun;
     this.add
       .text(W / 2, 48, `${this.playerName} · ${DIFFICULTY_LABELS[this.difficulty].title} · ${opLabel}`, { fontFamily: UI_FONT, fontSize: '20px', color: p.muted })
       .setOrigin(0.5);

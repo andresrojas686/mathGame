@@ -3,6 +3,7 @@ import { DIFFICULTIES } from '../config/difficulties';
 import { BattleState } from './BattleState';
 import { generateProblemFor } from './ProblemGenerator';
 import { mulberry32, seedFromString } from './seededRng';
+import type { Operation } from '../types';
 
 function sequence(seed: number, count: number): number[] {
   const rng = mulberry32(seed);
@@ -10,7 +11,7 @@ function sequence(seed: number, count: number): number[] {
 }
 
 /** Lo que vería cada jugador de la sala: la lista de operaciones en orden. */
-function problems(seed: number, count: number, operation: 'multiplicar' | 'dividir' = 'multiplicar'): string[] {
+function problems(seed: number, count: number, operation: Operation = 'multiplicar'): string[] {
   const rng = mulberry32(seed);
   const cfg = DIFFICULTIES.normal;
   const out: string[] = [];
@@ -43,6 +44,8 @@ describe('partidas con semilla compartida', () => {
   it('dos jugadores con la misma semilla reciben las mismas operaciones', () => {
     expect(problems(777, 30)).toEqual(problems(777, 30));
     expect(problems(777, 30, 'dividir')).toEqual(problems(777, 30, 'dividir'));
+    expect(problems(777, 30, 'sumar')).toEqual(problems(777, 30, 'sumar'));
+    expect(problems(777, 30, 'restar')).toEqual(problems(777, 30, 'restar'));
   });
 
   it('con semillas distintas las operaciones difieren', () => {

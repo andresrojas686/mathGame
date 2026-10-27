@@ -1,6 +1,6 @@
 # Instrucciones — lanzar y probar Multiplicón
 
-Estado actual: **v1 completa** (fases 1 a 6 de `plan.md`) más **salas multijugador** (fase 7). Multiplicación y división, tres gimnasios Pokémon con arte propio, teclado en pantalla, audio sintetizado con ajustes, ranking con servidor, partidas de hasta 50 jugadores por enlace y manifest para instalar como app.
+Estado actual: **v1 completa** (fases 1 a 6 de `plan.md`) más **salas multijugador** (fase 7) y **sumas y restas** (fase 8). Multiplicación, división, suma y resta, tres gimnasios Pokémon con arte propio, teclado en pantalla, audio sintetizado con ajustes, ranking con servidor, partidas de hasta 50 jugadores por enlace y manifest para instalar como app.
 
 ## Arranque rápido (5 comandos)
 
@@ -124,12 +124,12 @@ Detalles que conviene saber:
 
 ## Atajo para probar un nivel directo
 
-`?level=facil|normal|dificil` y opcionalmente `&op=dividir` en la URL saltan al combate con el último nombre y entrenador guardados. Ejemplo: `http://localhost:5173/?level=dificil&op=dividir`.
+`?level=facil|normal|dificil` y opcionalmente `&op=dividir|sumar|restar` en la URL saltan al combate con el último nombre y entrenador guardados. Ejemplo: `http://localhost:5173/?level=dificil&op=dividir`.
 
 ## Qué probar a mano
 
 1. **Tipografía.** Todo el texto se ve en Atkinson Hyperlegible (0 y O, 1 y 7, 6 y 8 se distinguen). Si el primer frame sale con otra fuente, la carga de `assets/fonts/atkinson.css` falló.
-2. **Operación.** En la pantalla de nivel, elige Dividir: las tarjetas cambian a "2 cifras ÷ 1 cifra" y el tiempo se duplica. En el combate aparecen divisiones exactas (nunca con resto) y la cabecera dice "División". La elección se recuerda.
+2. **Operación.** En la pantalla de nivel, elige Dividir: las tarjetas cambian a "2 cifras ÷ 1 cifra" y el tiempo se duplica. En el combate aparecen divisiones exactas (nunca con resto) y la cabecera dice "División". Sumar y Restar (teclas S y R) muestran "1 cifra + 1 cifra" o "2 cifras − 1 cifra" en fácil, con el tiempo base; las restas nunca dan negativo. La elección se recuerda.
 3. **Gimnasios.** Cada nivel tiene fondo en tres capas y paleta propia (roca y planta, agua y eléctrico, psíquico y fantasma). La operación se ve igual de grande y legible en los tres. Al recibir un ataque, el fondo se sacude con leve parallax.
 4. **Teclado en pantalla.** Toca los dígitos y ✓ a la derecha del campo de respuesta. Las teclas se iluminan también cuando escribes con el teclado físico.
 5. **Corazones.** Son corazones SVG teñidos con el color del gimnasio; al perder uno se encoge y desaparece.
@@ -143,7 +143,7 @@ Detalles que conviene saber:
 
 ## Pruebas automáticas
 
-Cliente (generadores de multiplicación y división, estado del combate, resumen de fallos, ranking local, PokéAPI, validación de ajustes, semilla compartida y enlaces de sala) y servidor (orden, escritura atómica, concurrencia, validación, rutas, lógica de salas y una partida completa de 50 jugadores sobre WebSocket real). No necesitan navegador ni red.
+Cliente (generadores de multiplicación, división, suma y resta, estado del combate, resumen de fallos, ranking local, PokéAPI, validación de ajustes, semilla compartida y enlaces de sala) y servidor (orden, escritura atómica, concurrencia, validación, rutas, lógica de salas y una partida completa de 50 jugadores sobre WebSocket real). No necesitan navegador ni red.
 
 ```bash
 pnpm test          # una pasada
@@ -190,7 +190,7 @@ game.scene.getScenes(true).map((s) => s.scene.key);   // escena activa
 const sc = game.scene.getScene('Battle');              // durante el combate
 sc.state.problem.text     // "576 ÷ 32"
 sc.state.problem.answer   // 18
-sc.state.operation        // 'multiplicar' | 'dividir'
+sc.state.operation        // 'multiplicar' | 'dividir' | 'sumar' | 'restar'
 sc.state.timeLimit        // segundos por operación (el doble en división)
 sc.monster.pokemonName    // Pokémon en pantalla
 sc.missLabel.text         // texto de fallo en uso
@@ -254,7 +254,7 @@ src/
 │   ├── feedback.ts            catálogo de música, sonidos de acierto y textos de fallo
 │   └── trainers.ts
 ├── systems/
-│   ├── ProblemGenerator.ts    multiplicación y división exacta
+│   ├── ProblemGenerator.ts    multiplicación, división exacta, suma y resta
 │   ├── BattleState.ts         bucle de combate (doble tiempo en división)
 │   ├── AudioManager.ts        síntesis, capa de tensión, ducking, autoplay, foco
 │   ├── FeedbackSettings.ts    preferencias validadas contra el catálogo

@@ -86,6 +86,47 @@ export function generateDivisionProblem(cfg: DifficultyConfig, previous?: Proble
   return withoutRepeat(() => buildDivision(cfg, rng), previous);
 }
 
+function buildAddition(cfg: DifficultyConfig, rng: Rng): Problem {
+  const a = randomWithDigits(pick(cfg.addendDigits, rng), rng);
+  const b = randomWithDigits(pick(cfg.addendDigits, rng), rng);
+  return { text: `${a} + ${b}`, answer: a + b, operands: [a, b] };
+}
+
+/**
+ * Genera una suma para el nivel: cada sumando con sus propias cifras de `addendDigits`.
+ * Nunca repite la operación anterior.
+ */
+export function generateAdditionProblem(cfg: DifficultyConfig, previous?: Problem, rng: Rng = Math.random): Problem {
+  return withoutRepeat(() => buildAddition(cfg, rng), previous);
+}
+
+function buildSubtraction(cfg: DifficultyConfig, rng: Rng): Problem {
+  const minuendDigits = pick(cfg.minuendDigits, rng);
+  // El sustraendo siempre tiene menos cifras que el minuendo: el resultado nunca es negativo ni cero.
+  const allowed = cfg.subtrahendDigits.filter((d) => d < minuendDigits);
+  const subtrahendDigits = pick(allowed.length ? allowed : [Math.max(1, minuendDigits - 1)], rng);
+  const a = randomWithDigits(minuendDigits, rng);
+  const b = randomWithDigits(subtrahendDigits, rng);
+  return { text: `${a} − ${b}`, answer: a - b, operands: [a, b] };
+}
+
+/**
+ * Genera una resta para el nivel: minuendo de `minuendDigits` cifras menos sustraendo de
+ * `subtrahendDigits` cifras, con respuesta ≥ 1. Nunca repite la operación anterior.
+ */
+export function generateSubtractionProblem(cfg: DifficultyConfig, previous?: Problem, rng: Rng = Math.random): Problem {
+  return withoutRepeat(() => buildSubtraction(cfg, rng), previous);
+}
+
 export function generateProblemFor(operation: Operation, cfg: DifficultyConfig, previous?: Problem, rng: Rng = Math.random): Problem {
-  return operation === 'dividir' ? generateDivisionProblem(cfg, previous, rng) : generateProblem(cfg, previous, rng);
+  switch (operation) {
+    case 'dividir':
+      return generateDivisionProblem(cfg, previous, rng);
+    case 'sumar':
+      return generateAdditionProblem(cfg, previous, rng);
+    case 'restar':
+      return generateSubtractionProblem(cfg, previous, rng);
+    case 'multiplicar':
+      return generateProblem(cfg, previous, rng);
+  }
 }

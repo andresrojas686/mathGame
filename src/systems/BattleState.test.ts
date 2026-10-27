@@ -18,6 +18,13 @@ describe('BattleState: división', () => {
     expect(s.problem.text).toContain('÷');
     expect(s.timeLimit).toBe(timeLimitForWave(2, DIFFICULTIES.normal) * 2);
   });
+  it('suma y resta usan el tiempo base, sin duplicar', () => {
+    for (const op of ['sumar', 'restar'] as const) {
+      const s = new BattleState(DIFFICULTIES.dificil, op, seededRng(5));
+      expect(s.problem.text).toContain(op === 'sumar' ? '+' : '−');
+      expect(s.timeLimit).toBe(timeLimitForWave(1, DIFFICULTIES.dificil));
+    }
+  });
   it('por defecto multiplica', () => {
     const s = new BattleState(DIFFICULTIES.facil, undefined, seededRng(1));
     expect(s.problem.text).toContain('×');

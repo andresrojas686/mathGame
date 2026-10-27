@@ -47,7 +47,7 @@ describe('ScoreStore', () => {
   it('empieza vacío si el archivo no existe y crea el directorio al guardar', async () => {
     const store = new ScoreStore(file);
     const data = await store.leaderboard();
-    expect(Object.keys(data.boards)).toHaveLength(6);
+    expect(Object.keys(data.boards)).toHaveLength(12);
     expect(data.boards['multiplicar:facil']).toEqual([]);
 
     const r = await store.submit(input(), new Date('2026-09-10T10:00:00Z'));
@@ -72,6 +72,9 @@ describe('ScoreStore', () => {
     expect(data.boards['multiplicar:facil']).toEqual([]);
     expect(data.boards['multiplicar:normal']).toHaveLength(1);
     expect(data.boards['dividir:facil'][0]?.correct).toBe(50);
+    await store.submit(input({ operation: 'restar', correct: 7 }));
+    expect((await store.leaderboard()).boards['restar:facil'][0]?.correct).toBe(7);
+    expect((await store.leaderboard()).boards['sumar:facil']).toEqual([]);
   });
 
   it('envíos concurrentes no se pisan', async () => {
@@ -102,5 +105,16 @@ describe('ScoreStore', () => {
     const store = new ScoreStore(file);
     const data = await store.leaderboard();
     expect(data.boards['multiplicar:facil']).toEqual([]);
+  });
+
+  it('un archivo de antes de suma y resta conserva sus tablas y suma las nuevas vacías', async () => {
+    const { mkdir, writeFile } = await import('node:fs/promises');
+    await mkdir(path.dirname(file), { recursive: true });
+    const entry = { name: 'Sofía', correct: 9, waves: 1, date: '2026-09-10T10:00:00.000Z' };
+    await writeFile(file, JSON.stringify({ version: 2, boards: { 'multiplicar:facil': [entry], 'dividir:normal': [] } }), 'utf8');
+    const data = await new ScoreStore(file).leaderboard();
+    expect(data.boards['multiplicar:facil']).toEqual([entry]);
+    expect(data.boards['sumar:dificil']).toEqual([]);
+    expect(data.boards['restar:facil']).toEqual([]);
   });
 });

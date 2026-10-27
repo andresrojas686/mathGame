@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { DIFFICULTY_LABELS } from '../config/difficulties';
+import { OPERATIONS_BY_ID } from '../config/operations';
 import { audio } from '../systems/AudioManager';
 import { summarizeFailures } from '../systems/BattleState';
 import { scores } from '../systems/scores/ScoreService';
@@ -39,7 +40,7 @@ export class ResultScene extends Phaser.Scene {
     audio.playMusic('menu');
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => (this.alive = false));
 
-    const opLabel = p.operation === 'dividir' ? 'División' : 'Multiplicación';
+    const opLabel = OPERATIONS_BY_ID[p.operation].noun;
     this.add.text(W / 2, 55, 'Fin de la partida', { fontFamily: UI_FONT, fontSize: '52px', color: COLORS.text }).setOrigin(0.5);
     this.add
       .text(W / 2, 105, `${p.name} · ${DIFFICULTY_LABELS[p.level].title} · ${opLabel}`, { fontFamily: UI_FONT, fontSize: '22px', color: COLORS.muted })

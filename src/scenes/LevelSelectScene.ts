@@ -1,8 +1,8 @@
 import Phaser from 'phaser';
 import { DIFFICULTIES, DIFFICULTY_IDS, DIFFICULTY_LABELS, timeLimitForWave } from '../config/difficulties';
+import { OPERATIONS, OPERATIONS_BY_ID } from '../config/operations';
 import { DEFAULT_TRAINER_ID } from '../config/trainers';
 import { audio } from '../systems/AudioManager';
-import { DIVISION_TIME_FACTOR } from '../systems/BattleState';
 import { getOnlineIntent } from '../systems/online/session';
 import { loadLastOperation, saveLastOperation } from '../systems/Preferences';
 import type { BattleParams, DifficultyConfig, DifficultyId, Operation } from '../types';
@@ -15,11 +15,6 @@ interface Card {
   box: Phaser.GameObjects.Rectangle;
   detail: Phaser.GameObjects.Text;
 }
-
-const OPERATIONS: { id: Operation; label: string; symbol: string }[] = [
-  { id: 'multiplicar', label: 'Multiplicar', symbol: '×' },
-  { id: 'dividir', label: 'Dividir', symbol: '÷' },
-];
 
 export class LevelSelectScene extends Phaser.Scene {
   private name = '';
@@ -50,8 +45,8 @@ export class LevelSelectScene extends Phaser.Scene {
     this.add.text(W / 2, 60, `${this.name}, elige operación y gimnasio`, { fontFamily: UI_FONT, fontSize: '40px', color: COLORS.text }).setOrigin(0.5);
 
     OPERATIONS.forEach((op, i) => {
-      const x = W / 2 + (i - 0.5) * 300;
-      const box = this.add.rectangle(x, 130, 280, 56, COLORS.field).setStrokeStyle(3, COLORS.fieldBorder).setInteractive({ useHandCursor: true });
+      const x = W / 2 + (i - (OPERATIONS.length - 1) / 2) * 260;
+      const box = this.add.rectangle(x, 130, 240, 56, COLORS.field).setStrokeStyle(3, COLORS.fieldBorder).setInteractive({ useHandCursor: true });
       box.on('pointerdown', () => this.setOperation(op.id));
       const text = this.add.text(x, 130, `${op.symbol}  ${op.label}`, { fontFamily: UI_FONT, fontSize: '26px', color: COLORS.text }).setOrigin(0.5);
       this.opBoxes.push(box);
@@ -64,7 +59,7 @@ export class LevelSelectScene extends Phaser.Scene {
     DIFFICULTY_IDS.forEach((id, i) => this.buildCard(id, startX + i * (cardW + gap), 400, cardW, 350));
 
     this.add
-      .text(W / 2, H - 40, 'M / D cambia la operación · ← → elige · Enter juega · 1, 2, 3 directo · Escape vuelve al líder', {
+      .text(W / 2, H - 40, 'M / D / S / R cambia la operación · ← → elige · Enter juega · 1, 2, 3 directo · Escape vuelve al líder', {
         fontFamily: UI_FONT,
         fontSize: '17px',
         color: COLORS.muted,
@@ -108,12 +103,16 @@ export class LevelSelectScene extends Phaser.Scene {
   private describe(cfg: DifficultyConfig): string {
     const digits = (list: number[]) => list.join(' o ');
     const plural = (list: number[]) => (Math.max(...list) > 1 ? 'cifras' : 'cifra');
-    const time = timeLimitForWave(1, cfg) * (this.operation === 'dividir' ? DIVISION_TIME_FACTOR : 1);
-    const line =
-      this.operation === 'dividir'
-        ? `${digits(cfg.dividendDigits)} cifras ÷ ${digits(cfg.divisorDigits)} ${plural(cfg.divisorDigits)}`
-        : `${digits(cfg.multiplicandDigits)} ${plural(cfg.multiplicandDigits)} × ${digits(cfg.multiplierDigits)} ${plural(cfg.multiplierDigits)}`;
-    return `${line}\n${time} s por operación`;
+    const operands = (a: number[], symbol: string, b: number[]) => `${digits(a)} ${plural(a)} ${symbol} ${digits(b)} ${plural(b)}`;
+    const op = OPERATIONS_BY_ID[this.operation];
+    const time = timeLimitForWave(1, cfg) * op.timeFactor;
+    const lines: Record<Operation, string> = {
+      multiplicar: operands(cfg.multiplicandDigits, op.symbol, cfg.multiplierDigits),
+      dividir: operands(cfg.dividendDigits, op.symbol, cfg.divisorDigits),
+      sumar: operands(cfg.addendDigits, op.symbol, cfg.addendDigits),
+      restar: operands(cfg.minuendDigits, op.symbol, cfg.subtrahendDigits),
+    };
+    return `${lines[this.operation]}\n${time} s por operación`;
   }
 
   private onKey(e: KeyboardEvent): void {
@@ -130,13 +129,12 @@ export class LevelSelectScene extends Phaser.Scene {
     } else if (e.key >= '1' && e.key <= '3') {
       const card = this.cards[Number(e.key) - 1];
       if (card) this.choose(card.id);
-    } else if (k === 'm') {
-      this.setOperation('multiplicar');
-    } else if (k === 'd') {
-      this.setOperation('dividir');
+    } else if (OPERATIONS.some((op) => op.key === k)) {
+      this.setOperation(OPERATIONS.find((op) => op.key === k)!.id);
     } else if (e.key === 'Tab') {
       e.preventDefault();
-      this.setOperation(this.operation === 'dividir' ? 'multiplicar' : 'dividir');
+      const i = OPERATIONS.findIndex((op) => op.id === this.operation);
+      this.setOperation(OPERATIONS[(i + 1) % OPERATIONS.length]!.id);
     } else if (e.key === 'Escape') {
       this.scene.start('TrainerSelect', { name: this.name });
     }

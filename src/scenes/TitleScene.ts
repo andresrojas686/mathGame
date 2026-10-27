@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { isDifficultyId } from '../config/difficulties';
+import { isOperation } from '../config/operations';
 import { DEFAULT_TRAINER_ID } from '../config/trainers';
 import { audio } from '../systems/AudioManager';
 import { loadLastName, loadLastOperation, loadLastTrainer } from '../systems/Preferences';
@@ -20,13 +21,14 @@ export class TitleScene extends Phaser.Scene {
     // Puntuaciones que no se pudieron enviar en partidas anteriores.
     void scores.flushPending();
 
-    // Atajo de desarrollo: ?level=normal[&op=dividir] salta directo al combate con el último nombre y entrenador.
+    // Atajo de desarrollo: ?level=normal[&op=dividir|sumar|restar] salta directo al combate con el último nombre y entrenador.
     const query = new URLSearchParams(window.location.search);
     const level = query.get('level');
+    const op = query.get('op');
     if (isDifficultyId(level)) {
       const params: BattleParams = {
         level,
-        operation: query.get('op') === 'dividir' ? 'dividir' : loadLastOperation(),
+        operation: isOperation(op) ? op : loadLastOperation(),
         name: loadLastName() || 'Jugador',
         trainer: loadLastTrainer() || DEFAULT_TRAINER_ID,
       };

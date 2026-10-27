@@ -1,3 +1,4 @@
+import { isOperation } from '../config/operations';
 import { MAX_NAME_LENGTH, type Operation } from '../types';
 
 const NAME_KEY = 'multiplicon.name';
@@ -36,7 +37,8 @@ export function saveLastName(name: string): void {
 const OPERATION_KEY = 'multiplicon.operation';
 
 export function loadLastOperation(): Operation {
-  return read(OPERATION_KEY) === 'dividir' ? 'dividir' : 'multiplicar';
+  const op = read(OPERATION_KEY);
+  return isOperation(op) ? op : 'multiplicar';
 }
 
 export function saveLastOperation(op: Operation): void {

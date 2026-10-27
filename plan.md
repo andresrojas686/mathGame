@@ -116,6 +116,21 @@ El jugador elige en la pantalla de nivel si juega a **multiplicar** o a **dividi
 - **Ranking separado.** Cada operación tiene sus propias tablas por nivel (sección 10).
 - La configuración vive en `dividendDigits` y `divisorDigits` de cada `DifficultyConfig`, y el generador en `generateDivisionProblem` (`src/systems/ProblemGenerator.ts`), ya implementados y probados; la fase 4 conecta la elección en pantalla.
 
+### Operación: sumar o restar (fase 8)
+
+Las dos se añaden junto a multiplicar y dividir en la pantalla de nivel (teclas S y R), con los mismos tres niveles.
+
+| | Fácil | Normal | Difícil |
+|---|---|---|---|
+| **Suma** (cada sumando se sortea aparte) | 1 + 1 cifra | 1 o 2 + 1 o 2 cifras | 2, 3 o 4 + 2, 3 o 4 cifras |
+| **Resta** (minuendo − sustraendo) | 2 − 1 cifra | 3 − 2 cifras | 4 − 3 cifras |
+
+- **La resta nunca da negativo.** El sustraendo siempre tiene menos cifras que el minuendo, así que el resultado mínimo es 1 (10 − 9). Si alguien configurara un sustraendo igual o más largo, el generador lo acorta.
+- **Llevadas y préstamos libres.** Los números se sortean sin evitarlos.
+- **Tiempo base**, igual que la multiplicación (factor 1).
+- **Ranking separado**, como las otras operaciones: 12 tablas en total. Un `scores.json` anterior carga sin cambios y las tablas nuevas aparecen vacías.
+- La configuración vive en `addendDigits`, `minuendDigits` y `subtrahendDigits` de cada `DifficultyConfig`; los generadores son `generateAdditionProblem` y `generateSubtractionProblem`. Etiquetas, símbolos, teclas y factor de tiempo de las cuatro operaciones están en `src/config/operations.ts`.
+
 ### Generador de operaciones
 
 ```ts
@@ -562,7 +577,13 @@ El ranking vive en `data/scores.json` en la raíz del proyecto. Hay **seis tabla
     "multiplicar:dificil": [],
     "dividir:facil":       [],
     "dividir:normal":      [],
-    "dividir:dificil":     []
+    "dividir:dificil":     [],
+    "sumar:facil":         [],
+    "sumar:normal":        [],
+    "sumar:dificil":       [],
+    "restar:facil":        [],
+    "restar:normal":       [],
+    "restar:dificil":      []
   }
 }
 ```
@@ -709,6 +730,9 @@ Decisiones que vale la pena recordar:
 - **Desconectarse termina tu partida.** Si no, una pestaña cerrada dejaría a los demás esperando para siempre en la pantalla de resultados.
 - **Nadie entra a mitad de partida.** Llegar tarde a una secuencia de operaciones que los demás ya llevan resolviendo no es una competencia.
 - **El marcador se envía agrupado** (250 ms en cliente y servidor). Con 50 jugadores respondiendo, un mensaje por acierto es ruido.
+
+### Fase 8 — Sumas y restas ✔
+Dos operaciones nuevas con tres niveles cada una, su propio ranking y disponibles en salas (sección 4). Las cuatro operaciones se describen en un solo sitio, `src/config/operations.ts`, que usan la pantalla de nivel, el ranking, el combate y los resultados.
 
 ---
 

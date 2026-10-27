@@ -26,13 +26,16 @@ describe('parseScoreInput', () => {
   it('acepta un cuerpo válido', () => {
     expect(parseScoreInput(ok)).toEqual(ok);
   });
+  it.each(['sumar', 'restar'])('acepta la operación %s', (operation) => {
+    expect(parseScoreInput({ ...ok, operation }).operation).toBe(operation);
+  });
   it('operation por defecto es multiplicar', () => {
     const { operation: _omit, ...noOp } = ok;
     expect(parseScoreInput(noOp).operation).toBe('multiplicar');
   });
   it.each([
     ['level inválido', { ...ok, level: 'extremo' }],
-    ['operation inválida', { ...ok, operation: 'restar' }],
+    ['operation inválida', { ...ok, operation: 'potencia' }],
     ['correct negativo', { ...ok, correct: -1 }],
     ['correct decimal', { ...ok, correct: 1.5 }],
     ['correct texto', { ...ok, correct: '12' }],

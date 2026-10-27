@@ -70,6 +70,8 @@ describe('generateProblem', () => {
     const cfg = DIFFICULTIES.facil;
     expect(generateProblemFor('multiplicar', cfg, undefined, seededRng(1)).text).toContain('×');
     expect(generateProblemFor('dividir', cfg, undefined, seededRng(1)).text).toContain('÷');
+    expect(generateProblemFor('sumar', cfg, undefined, seededRng(1)).text).toContain('+');
+    expect(generateProblemFor('restar', cfg, undefined, seededRng(1)).text).toContain('−');
   });
 
   it('no repite la operación anterior aunque el rng insista', () => {

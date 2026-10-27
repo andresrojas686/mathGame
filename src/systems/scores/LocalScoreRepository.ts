@@ -1,11 +1,12 @@
-import { boardKey, type BoardKey, type DifficultyId, type LeaderboardData, type Operation, type ScoreEntry, type ScoreSubmission } from '../../types';
+import { OPERATION_IDS } from '../../config/operations';
+import { boardKey, type BoardKey, type DifficultyId, type LeaderboardData, type ScoreEntry, type ScoreSubmission } from '../../types';
 import { safeStorage, type KeyValueStorage, type RepositorySubmitResult, type ScoreRepository } from './ScoreRepository';
 
 const SCORES_KEY = 'multiplicon.scores';
 const PENDING_KEY = 'multiplicon.pending';
 const KEEP = 20;
 const LEVELS: DifficultyId[] = ['facil', 'normal', 'dificil'];
-const OPERATIONS: Operation[] = ['multiplicar', 'dividir'];
+const OPERATIONS = OPERATION_IDS;
 
 export function emptyLeaderboard(): LeaderboardData {
   const boards = {} as Record<BoardKey, ScoreEntry[]>;

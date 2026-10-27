@@ -8,13 +8,19 @@ describe('parseClientMessage', () => {
     expect(msg).toEqual({ type: 'create', name: 'Ana María', trainer: 'misty', level: 'dificil', operation: 'dividir' });
   });
 
+  it('acepta salas de suma y de resta', () => {
+    for (const operation of ['sumar', 'restar']) {
+      expect(parseClientMessage({ type: 'create', name: 'Ana', trainer: 'misty', level: 'normal', operation })).toMatchObject({ operation });
+    }
+  });
+
   it('acepta JSON en texto', () => {
     expect(parseClientMessage('{"type":"ping"}')).toEqual({ type: 'ping' });
   });
 
   it('rechaza nivel u operación inventados', () => {
     expect(() => parseClientMessage({ type: 'create', name: 'Ana', trainer: 'misty', level: 'imposible', operation: 'multiplicar' })).toThrowError(RoomError);
-    expect(() => parseClientMessage({ type: 'create', name: 'Ana', trainer: 'misty', level: 'facil', operation: 'sumar' })).toThrowError(RoomError);
+    expect(() => parseClientMessage({ type: 'create', name: 'Ana', trainer: 'misty', level: 'facil', operation: 'potencia' })).toThrowError(RoomError);
   });
 
   it('normaliza el código de sala y rechaza los que no tienen 5 caracteres', () => {

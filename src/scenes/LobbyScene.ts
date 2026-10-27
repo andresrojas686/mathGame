@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { DIFFICULTY_LABELS } from '../config/difficulties';
+import { OPERATIONS_BY_ID } from '../config/operations';
 import { DEFAULT_TRAINER_ID } from '../config/trainers';
 import { audio } from '../systems/AudioManager';
 import type { RoomView } from '../systems/online/protocol';
@@ -152,7 +153,7 @@ export class LobbyScene extends Phaser.Scene {
     this.codeText.setText(room.code);
     this.linkText.setText(roomLink(room.code));
     const label = DIFFICULTY_LABELS[room.level].title;
-    const op = room.operation === 'dividir' ? 'División' : 'Multiplicación';
+    const op = OPERATIONS_BY_ID[room.operation].noun;
     this.infoText.setText(`${op} · ${label} · hasta ${MAX_ROOM_PLAYERS} jugadores`);
 
     const visible = room.players.slice(0, LIST_SLOTS);
